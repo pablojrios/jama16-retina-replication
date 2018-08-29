@@ -184,13 +184,19 @@ for i in {0..4}; do
 done
 
 # Define distributions for data sets.
+# [pablo] remove head -n "$bin2_0_cnt
 bin2_0=$(
 find "$pool_dir/"[0-1] -iname "*.jpg" |
 shuf --random-source=<(get_seeded_random "$shuffle_seed") |
 head -n "$bin2_0_cnt"
 )
 
+# [pablo] next 2 lines
+# bin2_0_cnt=$(echo $bin2_0 | wc -w)
+#  bin2_0_tr_cnt="$(expr $bin2_0_cnt - 8096)"
+
 bin2_1=$(find "$pool_dir/"[2-4] -iname "*.jpg")
+# [pablo] next line is the same as bin2_1_cnt=$(echo $bin2_1 | wc -w)
 bin2_1_cnt=$(echo $bin2_1 | tr " " "\n" | wc -l)
 
 echo "Creating directories for data sets"
@@ -206,16 +212,16 @@ distribute_images()
   xargs -I{} cp "{}" "$4"
 }
 
-echo "Gathering images for train set (0/2)"
+echo "Gathering $bin2_0_tr_cnt images for train set (0/2)"
 distribute_images "$bin2_0" head "$bin2_0_tr_cnt" "$output_dir/train/0/."
 
-echo "Gathering images for train set (1/2)"
+echo "Gathering $bin2_1_tr_cnt images for train set (1/2)"
 distribute_images "$bin2_1" head "$bin2_1_tr_cnt" "$output_dir/train/1/."
 
-echo "Gathering images for test set (0/2)"
+echo "Gathering $(expr $bin2_0_cnt - $bin2_0_tr_cnt) images for test set (0/2)"
 distribute_images "$bin2_0" tail "$(expr $bin2_0_cnt - $bin2_0_tr_cnt)" "$output_dir/test/0/."
 
-echo "Gathering images for test set (1/2)"
+echo "Gathering $(expr $bin2_1_cnt - $bin2_1_tr_cnt) images for test set (1/2)"
 distribute_images "$bin2_1" tail "$(expr $bin2_1_cnt - $bin2_1_tr_cnt)" "$output_dir/test/1/."
 
 echo "Converting data set to tfrecords..."
