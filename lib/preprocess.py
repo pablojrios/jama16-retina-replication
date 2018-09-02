@@ -230,25 +230,3 @@ def scale_normalize(save_path=None, images_path=None, image_paths=None,
                                     save_path=save_path,
                                     diameter=diameter, verbosity=verbosity)
 
-
-def resize(images_paths, size=299):
-    """
-    Function for resizing images.
-
-    :param images_paths:
-        Required. Paths to images.
-
-    :param size:
-        Optional. Size to which resize to. Defaults to 299.
-
-    :return:
-        Nothing.
-    """
-    for image_path in images_paths:
-        image = cv2.imread(image_path)
-
-        # Resize the image.
-        image = cv2.resize(image, (size, size))
-
-        # Save the image.
-        cv2.imwrite(image_path, image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])

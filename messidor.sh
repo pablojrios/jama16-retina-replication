@@ -4,12 +4,13 @@
 # Assumes that the data set resides in ./data/messidor.
 
 messidor_dir="./data/messidor"
+vendor_messidor_dir="./vendor/messidor"
 default_output_dir="$messidor_dir/bin2"
-grad_grades="./vendor/messidor/messidor_gradability_grades.csv"
+grad_grades="$vendor_messidor_dir/messidor_gradability_grades.csv"
 
 check_parameters()
 {
-  if [ "$1" -ge 3 ]; then
+  if [ "$1" -ge 4 ]; then
     echo "Illegal number of parameters".
     exit 1
   fi
@@ -25,7 +26,7 @@ check_parameters()
 }
 
 strip_params=$(echo "$@" | sed "s/--\([a-z]\+\)\(=\(.\+\)\)\?/\1/g")
-check_parameters "$#" "$strip_params" "output only_gradable"
+check_parameters "$#" "$strip_params" "output only_gradable large_diameter"
 
 # Get output directory from parameters.
 output_dir=$(echo "$@" | sed "s/.*--output=\([^ ]\+\).*/\1/g")
@@ -57,7 +58,15 @@ fi
 
 # Preprocess the data set and categorize the images by labels into
 #  subdirectories.
-python preprocess_messidor.py --data_dir="$messidor_dir" || exit 1
+# use 512 pixels diameter images ?
+if echo "$@" | grep -c -- "--large_diameter" >/dev/null; then
+    echo "Diameter of fundus to 512 pixels."
+    python preprocess_messidor.py --data_dir="$messidor_dir" --large_diameter || exit 1
+else
+    echo "Diameter of fundus to 299 pixels."
+    python preprocess_messidor.py --data_dir="$messidor_dir" || exit 1
+fi
+
 
 # Remove ungradable images if needed.
 if echo "$@" | grep -F -c -- "--only_gradable" >/dev/null; then

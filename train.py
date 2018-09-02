@@ -13,6 +13,9 @@ import lib.evaluation
 print(f"Numpy version: {np.__version__}")
 print(f"Tensorflow version: {tf.__version__}")
 
+# hacer visiable la GPU 1050 Ti
+os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "6"
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 random.seed(432)
 
@@ -44,6 +47,8 @@ parser.add_argument("-so", "--save_operating_thresholds_path",
 parser.add_argument("-sgd", "--vanilla_sgd", action="store_true",
                     help="use vanilla stochastic gradient descent instead of "
                          "nesterov accelerated gradient descent")
+parser.add_argument("-ld", "--large_diameter", action="store_true",
+                    help="diameter of fundus to 512 pixels")
 
 args = parser.parse_args()
 train_dir = str(args.train_dir)
@@ -52,6 +57,7 @@ save_model_path = str(args.save_model_path)
 save_summaries_dir = str(args.save_summaries_dir)
 save_operating_thresholds_path = str(args.save_operating_thresholds_path)
 use_sgd = bool(args.vanilla_sgd)
+large_diameter = bool(args.large_diameter)
 
 print("""
 Training images folder: {},
@@ -59,9 +65,10 @@ Validation images folder: {},
 Saving model and graph checkpoints at: {},
 Saving summaries at: {},
 Saving operating points at: {},
-Use SGD: {}
+Use SGD: {},
+Large diameter: {}
 """.format(train_dir, val_dir, save_model_path, save_summaries_dir,
-           save_operating_thresholds_path, use_sgd))
+           save_operating_thresholds_path, use_sgd, large_diameter))
 
 # Various constants.
 num_channels = 3
@@ -92,7 +99,13 @@ prefetch_buffer_size = 2 * train_batch_size
 if tf.test.is_gpu_available():
     print("Found GPU! Using channels first as default image data format.")
     image_data_format = 'channels_first'
+    input_shape=(3,299,299)
+    if (large_diameter):
+        input_shape=(3,512,512)
 else:
+    input_shape=(299,299,3)
+    if (large_diameter):
+        input_shape=(512,512,3)
     image_data_format = 'channels_last'
 
 # Set up a session and bind it to Keras.
@@ -127,7 +140,7 @@ val_init_op = iterator.make_initializer(val_dataset)
 
 # Base model InceptionV3 without top and global average pooling.
 base_model = tf.keras.applications.InceptionV3(
-    include_top=False, weights='imagenet', pooling='avg', input_tensor=x)
+    include_top=False, weights='imagenet', pooling='avg', input_tensor=x, input_shape=input_shape)
 
 # Add dense layer with the same amount of neurons as labels.
 logits = tf.layers.dense(base_model.output, units=1)

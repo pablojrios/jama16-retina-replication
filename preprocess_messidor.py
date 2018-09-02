@@ -12,9 +12,12 @@ from lib.preprocess import scale_normalize
 parser = argparse.ArgumentParser(description='Preprocess Messidor-Original data set.')
 parser.add_argument("--data_dir", help="Directory where Messidor-Original resides.",
                     default="data/messidor")
+parser.add_argument("--large_diameter", action="store_true",
+                    help="diameter of fundus to 512 pixels.")
 
 args = parser.parse_args()
 data_dir = str(args.data_dir)
+large_diameter = bool(args.large_diameter)
 
 # Create directories for grades.
 [makedirs(join(data_dir, str(i))) for i in [0, 1, 2, 3]
@@ -28,6 +31,9 @@ makedirs(tmp_path)
 
 # Find shard zip files.
 shards_paths = glob(join(data_dir, "*.zip"))
+
+diameter = 512 if large_diameter else 299
+print("Large fundus diameter={}".format(large_diameter))
 
 for shard in shards_paths:
     shard_name = splitext(basename(shard))[0]
@@ -59,7 +65,7 @@ for shard in shards_paths:
         # Find contour of eye fundus in image, and scale
         #  diameter of fundus to 299 pixels and crop the edges.
         res = scale_normalize(save_path=tmp_path, image_path=im_path,
-                              diameter=299, verbosity=0)
+                              diameter=diameter, verbosity=0)
 
         # Status-message.
         msg = "\r- Preprocessing image: {0:>6} / {1}".format(

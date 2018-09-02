@@ -34,7 +34,7 @@ def initialize_dataset(image_dir, batch_size, num_epochs=1,
                        num_workers=1, prefetch_buffer_size=None,
                        shuffle_buffer_size=None,
                        image_data_format='channels_last',
-                       num_channels=3, image_dim=[299, 299]):
+                       num_channels=3):
     # Retrieve data set from pattern.
     dataset = _tfrecord_dataset_from_folder(image_dir)
 

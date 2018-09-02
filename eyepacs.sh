@@ -4,10 +4,11 @@
 # Assumes that the data set resides in ./data/eyepacs.
 
 eyepacs_dir="./data/eyepacs"
+vendor_eyepacs_dir="./vendor/eyepacs"
 default_pool_dir="$eyepacs_dir/pool"
 default_shuffle_seed=42
 default_output_dir="$eyepacs_dir/bin2"
-grad_grades="./vendor/eyepacs/eyepacs_gradability_grades.csv"
+grad_grades="$vendor_eyepacs_dir/eyepacs_gradability_grades.csv"
 
 # From [1].
 get_seeded_random()
@@ -21,18 +22,19 @@ print_usage()
   echo ""
   echo "Extracting and preprocessing script for Kaggle EyePACS."
   echo ""
-  echo "Optional parameters: --redistribute, --pool_dir, --seed, --only_gradable"
+  echo "Optional parameters: --redistribute, --pool_dir, --seed, --only_gradable --large_diameter"
   echo "--redistribute	Redistribute the data set from pool (default: false)"
   echo "--pool_dir	Path to pool folder (default: $default_pool_dir)"
   echo "--seed		Seed number for shuffling before distributing the data set (default: $default_shuffle_seed)"
   echo "--only_gradable Skip ungradable images. (default: false)"
+  echo "--large_diameter  diameter of fundus to 512 pixels (default: false, 299 pixels)"
   echo "--output_dir 	Path to output directory (default: $default_output_dir)"
   exit 1
 }
 
 check_parameters()
 {
-  if [ "$1" -ge 6 ]; then
+  if [ "$1" -ge 7 ]; then
     echo "Illegal number of parameters".
     print_usage
   fi
@@ -52,7 +54,7 @@ if echo "$@" | grep -c -- "-h" >/dev/null; then
 fi
 
 strip_params=$(echo "$@" | sed "s/--\([a-z_]\+\)\(=\([^ ]\+\)\)\?/\1/g")
-check_parameters "$#" "$strip_params" "redistribute seed pool_dir only_gradable output_dir"
+check_parameters "$#" "$strip_params" "redistribute seed pool_dir only_gradable output_dir large_diameter"
 
 # Get seed from parameters.
 shuffle_seed=$(echo "$@" | sed "s/.*--seed=\([0-9]\+\).*/\1/")
@@ -143,13 +145,20 @@ if ! echo "$@" | grep -c -- "--redistribute" >/dev/null; then
   7z e "$eyepacs_dir/test.zip.001" -o"$pool_dir" || exit 1
 
   # Copy test labels from vendor to data set folder.
-  cp vendor/eyepacs/testLabels.csv.zip "$eyepacs_dir/."
+  cp "$vendor_eyepacs_dir/testLabels.csv.zip" "$eyepacs_dir/."
 
   # Unzip labels.
   7z e "$eyepacs_dir/trainLabels.csv.zip" -o"$pool_dir" || exit 1
   7z e "$eyepacs_dir/testLabels.csv.zip" -o"$pool_dir" || exit 1
 
-  python preprocess_eyepacs.py --data_dir="$pool_dir"
+  # use 512 pixels diameter images ?
+  if echo "$@" | grep -c -- "--large_diameter" >/dev/null; then
+    echo "Diameter of fundus to 512 pixels."
+    python preprocess_eyepacs.py --data_dir="$pool_dir" --large_diameter
+  else
+    echo "Diameter of fundus to 299 pixels."
+    python preprocess_eyepacs.py --data_dir="$pool_dir"
+  fi
 
   # Remove images in pool.
   find "$pool_dir" -maxdepth 1 -iname "*.jpeg" -delete
@@ -175,6 +184,10 @@ else
   bin2_0_cnt=48784
   bin2_0_tr_cnt=40688
   bin2_1_tr_cnt=16458
+  # cantidades para dataset pequeño en eyepacs_small
+  # bin2_0_cnt=160
+  # bin2_0_tr_cnt=110
+  # bin2_1_tr_cnt=20
 fi
 
 echo "Finding images..."
@@ -184,16 +197,11 @@ for i in {0..4}; do
 done
 
 # Define distributions for data sets.
-# [pablo] remove head -n "$bin2_0_cnt
 bin2_0=$(
 find "$pool_dir/"[0-1] -iname "*.jpg" |
 shuf --random-source=<(get_seeded_random "$shuffle_seed") |
 head -n "$bin2_0_cnt"
 )
-
-# [pablo] next 2 lines
-# bin2_0_cnt=$(echo $bin2_0 | wc -w)
-#  bin2_0_tr_cnt="$(expr $bin2_0_cnt - 8096)"
 
 bin2_1=$(find "$pool_dir/"[2-4] -iname "*.jpg")
 # [pablo] next line is the same as bin2_1_cnt=$(echo $bin2_1 | wc -w)
