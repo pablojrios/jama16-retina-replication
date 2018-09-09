@@ -21,3 +21,7 @@ tmp/
 
 # Other dotfiles
 .python-version
+
+# IntelliJ IDEA
+.idea/
+*.iml
