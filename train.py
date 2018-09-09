@@ -13,8 +13,13 @@ import lib.evaluation
 print(f"Numpy version: {np.__version__}")
 print(f"Tensorflow version: {tf.__version__}")
 
-# hacer visiable la GPU 1050 Ti
+# hacer visiable la GPU 1050 Ti, TF v1.10 pide TF_MIN_GPU_MULTIPROCESSOR_COUNT >= 8
 os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "6"
+# usar la GeForce GTX 1080 Ti
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+# The GPU id to use, usually either "0" or "1"
+# Con 0 usa GeForce GTX 1050 Ti
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 random.seed(432)
@@ -24,7 +29,7 @@ default_train_dir = "./data/eyepacs/bin2/train"
 default_val_dir = "./data/eyepacs/bin2/validation"
 default_save_model_path = "./tmp/model"
 default_save_summaries_dir = "./tmp/logs"
-default_save_operating_thresholds_path = "./tmp/op_pts.csv"
+default_save_operating_thresholds_path = "./tmp/validation_op_pts.csv"
 
 parser = argparse.ArgumentParser(
                     description="Trains and saves neural network for "
@@ -78,13 +83,13 @@ num_workers = 8
 learning_rate = 3e-3
 momentum = 0.9  # Only used when not training with momentum optimizer
 use_nesterov = True  # Only used when not training with momentum optimizer
-train_batch_size = 64
+train_batch_size = 32 if large_diameter else 64
 
 # Hyper-parameters for validation.
 num_epochs = 200
 wait_epochs = 10
 min_delta_auc = 0.01
-val_batch_size = 64
+val_batch_size = 32 if large_diameter else 64
 num_thresholds = 200
 kepsilon = 1e-7
 
@@ -92,20 +97,16 @@ kepsilon = 1e-7
 thresholds = lib.metrics.generate_thresholds(num_thresholds, kepsilon) + [0.5]
 
 # Buffer size for image shuffling.
-shuffle_buffer_size = 2048
+shuffle_buffer_size = 1024 if large_diameter else 2048
 prefetch_buffer_size = 2 * train_batch_size
 
 # Set image datas format to channels first if GPU is available.
 if tf.test.is_gpu_available():
     print("Found GPU! Using channels first as default image data format.")
     image_data_format = 'channels_first'
-    input_shape=(3,299,299)
-    if (large_diameter):
-        input_shape=(3,512,512)
+    input_shape=(3,512,512) if large_diameter else (3,299,299)
 else:
-    input_shape=(299,299,3)
-    if (large_diameter):
-        input_shape=(512,512,3)
+    input_shape=(512,512,3) if large_diameter else (299,299,3)
     image_data_format = 'channels_last'
 
 # Set up a session and bind it to Keras.
@@ -230,6 +231,8 @@ latest_peak_auc = 0
 waited_epochs = 0
 
 for epoch in range(num_epochs):
+    print("")
+
     # Start training.
     tf.keras.backend.set_learning_phase(True)
     sess.run(train_init_op)

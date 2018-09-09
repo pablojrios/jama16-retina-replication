@@ -5,31 +5,47 @@
 
 messidor_dir="./data/messidor"
 vendor_messidor_dir="./vendor/messidor"
-default_output_dir="$messidor_dir/bin2"
+default_output_dir="$messidor_dir/bin2/"
 grad_grades="$vendor_messidor_dir/messidor_gradability_grades.csv"
+
+print_usage()
+{
+  echo ""
+  echo "Extracting and preprocessing script for Messidor-1 dataset."
+  echo ""
+  echo "Optional parameters: --only_gradable --large_diameter"
+  echo "--only_gradable Skip ungradable images. (default: false)"
+  echo "--large_diameter  diameter of fundus to 512 pixels (default: false, 299 pixels)"
+  echo "--output_dir 	Path to output directory (default: $default_output_dir)"
+  exit 1
+}
 
 check_parameters()
 {
   if [ "$1" -ge 4 ]; then
     echo "Illegal number of parameters".
-    exit 1
+    print_usage
   fi
   if [ "$1" -ge 1 ]; then
     for param in $2; do
       if [ $(echo "$3" | grep -c -- "$param") -eq 0 ]; then
         echo "Unknown parameter $param."
-        exit 1
+        print_usage
       fi
     done
   fi
   return 0
 }
 
-strip_params=$(echo "$@" | sed "s/--\([a-z]\+\)\(=\(.\+\)\)\?/\1/g")
-check_parameters "$#" "$strip_params" "output only_gradable large_diameter"
+if echo "$@" | grep -c -- "-h" >/dev/null; then
+  print_usage
+fi
+
+strip_params=$(echo "$@" | sed "s/--\([a-z_]\+\)\(=\([^ ]\+\)\)\?/\1/g")
+check_parameters "$#" "$strip_params" "output_dir only_gradable large_diameter"
 
 # Get output directory from parameters.
-output_dir=$(echo "$@" | sed "s/.*--output=\([^ ]\+\).*/\1/g")
+output_dir=$(echo "$@" | sed "s/.*--output_dir=\([^ ]\+\).*/\1/")
 
 # Check if output directory is valid.
 if ! [[ "$output_dir" =~ ^[^-]+$ ]]; then
@@ -38,7 +54,7 @@ fi
 
 if ls "$output_dir" >/dev/null 2>&1; then
   echo "Dataset is already located in $output_dir."
-  echo "Specify another output directory with the --output flag."
+  echo "Specify another output directory with the --output_dir flag."
   exit 1
 fi
 

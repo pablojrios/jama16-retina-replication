@@ -53,6 +53,7 @@ if echo "$@" | grep -c -- "-h" >/dev/null; then
   print_usage
 fi
 
+# ‘s/regexp/replacement/flags’
 strip_params=$(echo "$@" | sed "s/--\([a-z_]\+\)\(=\([^ ]\+\)\)\?/\1/g")
 check_parameters "$#" "$strip_params" "redistribute seed pool_dir only_gradable output_dir large_diameter"
 
