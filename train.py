@@ -9,6 +9,24 @@ from glob import glob
 import lib.metrics
 import lib.dataset
 import lib.evaluation
+from tensorflow.python.keras import Model
+from tensorflow.python.keras.layers import Dense
+
+
+def sigmoid_cross_entropy_with_logits(y_true, y_pred):
+    return tf.reduce_mean(
+        tf.nn.sigmoid_cross_entropy_with_logits(labels=y_true, logits=y_pred))
+
+
+def display_model_params():
+    total_params = np.sum([np.prod(v.shape) for v in tf.global_variables()])
+    trainable_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
+    non_trainable_params = total_params - trainable_params
+
+    print("Total params: {:,}".format(total_params.value))
+    print("Trainable params: {:,}".format(trainable_params.value))
+    print("Non-trainable params: {:,}".format(non_trainable_params.value))
+
 
 print(f"Numpy version: {np.__version__}")
 print(f"Tensorflow version: {tf.__version__}")
@@ -19,7 +37,7 @@ os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "6"
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # The GPU id to use, usually either "0" or "1"
 # Con 0 usa GeForce GTX 1050 Ti
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 random.seed(432)
@@ -141,7 +159,27 @@ val_init_op = iterator.make_initializer(val_dataset)
 
 # Base model InceptionV3 without top and global average pooling.
 base_model = tf.keras.applications.InceptionV3(
-    include_top=False, weights='imagenet', pooling='avg', input_tensor=x, input_shape=input_shape)
+    include_top=False, weights='imagenet', pooling='avg', input_tensor=x)
+
+base_model.trainable = True
+set_trainable = False
+for layer in base_model.layers:
+    if layer.name == 'mixed9':
+        set_trainable = True
+    if set_trainable:
+        layer.trainable = True
+        print("setting layer {} trainable".format(layer.name))
+    else:
+        layer.trainable = False
+base_model.summary()
+display_model_params()
+
+if use_sgd:
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+else:
+    optimizer = tf.train.MomentumOptimizer(
+        learning_rate=learning_rate, momentum=momentum,
+        use_nesterov=use_nesterov)
 
 # Add dense layer with the same amount of neurons as labels.
 logits = tf.layers.dense(base_model.output, units=1)
@@ -149,22 +187,18 @@ logits = tf.layers.dense(base_model.output, units=1)
 # Get the predictions with a sigmoid activation function.
 predictions = tf.sigmoid(logits, name='predictions')
 
+retina_model = Model(inputs=base_model.inputs, outputs=logits)
+retina_model.compile(optimizer=optimizer, loss=sigmoid_cross_entropy_with_logits)
+retina_model.summary()
+display_model_params()
 
 # Retrieve loss of network using cross entropy.
-mean_xentropy = tf.reduce_mean(
-    tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits))
+mean_xentropy = sigmoid_cross_entropy_with_logits(y_true=y, y_pred=logits)
 
 # Define optimizer.
 global_step = tf.Variable(0, dtype=tf.int32)
 
-if use_sgd:
-    train_op = tf.train.GradientDescentOptimizer(learning_rate) \
-        .minimize(loss=mean_xentropy, global_step=global_step)
-else:
-    train_op = tf.train.MomentumOptimizer(
-        learning_rate=learning_rate, momentum=momentum,
-        use_nesterov=use_nesterov) \
-            .minimize(loss=mean_xentropy, global_step=global_step)
+train_op = optimizer.minimize(loss=mean_xentropy, global_step=global_step)
 
 # Metrics for finding best validation set.
 tp, update_tp, reset_tp = lib.metrics.create_reset_metric(
