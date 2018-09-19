@@ -3,11 +3,13 @@
 # in September 2018
 
 # Assumes that the dataset (IMAGES.part<i>.rar files) resides in ./data/messidor2.
-# Assumes annotation file is in ./vendor/messidor.
+# Assumes annotation file is ./vendor/messidor/messidor_data.csv.
+# sed -i 's/\.jpg/\.JPG/g' messidor_data.csv
 
 messidor_dir="./data/messidor2"
 vendor_messidor_dir="./vendor/messidor"
 messidor_volume1_path="$messidor_dir/IMAGES.part1.rar"
+messidor_volume_files="IMAGES.part*.rar"
 default_output_dir="$messidor_dir/bin2"
 # gradability grades is only from messidor-1 dataset
 grad_grades_file="messidor_gradability_grades.csv"
@@ -69,7 +71,10 @@ if [ ! -f "$vendor_messidor_dir/$dr_grades_file" ]; then
   exit 1
 fi
 
-count_files=$(ls $messidor_dir/IMAGES | egrep 'png|JPG' 2>/dev/null | wc -l)
+count_files=0
+if [ -d "$messidor_dir/IMAGES" ]; then
+  count_files=$(ls "$messidor_dir/IMAGES" | egrep 'png|JPG' 2>/dev/null | wc -l)
+fi
 
 if [[ $count_files -ne 1748 ]]; then
   # Check if unrar has been installed.
@@ -79,12 +84,12 @@ if [[ $count_files -ne 1748 ]]; then
     exit 1
   fi
 
-  if [[ $count_files -ne 1748 ]]; then
+  if [ -d "$messidor_dir/IMAGES" ] && [[ $count_files -ne 1748 ]]; then
     echo "Messidor-2 wasn't unpacked properly before, there are $count_files (expected: 1748)"
   fi
 
   # Confirm the IMAGES.part<i>.rar files (i=1..4) and annotations .csv files are present.
-  rar_count=$(find "$messidor_dir" -maxdepth 1 -iname "IMAGES.part*.rar" | wc -l)
+  rar_count=$(find "$messidor_dir" -maxdepth 1 -iname "$messidor_volume_files" | wc -l)
 
   if [ $rar_count -ne 4 ]; then
     echo "$messidor_dir does not contain all IMAGES.part<i>.rar files! There are $rar_count files (expected: 4)"
@@ -109,32 +114,33 @@ else
     python preprocess_messidor2.py --data_dir="$messidor_dir" || exit 1
 fi
 
-## Preprocess the data set and categorize the images by labels into
-##  subdirectories.
-#python preprocess_messidor2.py --data_dir="$messidor_dir" || exit 1
-#
-#echo "Preparing data set..."
-#mkdir -p "$output_dir/0" "$output_dir/1"
-#
-#echo "Moving images to new directories..."
-#find "$messidor_dir/0" -iname "*.jpg" -exec mv {} "$output_dir/0/." \;
-#find "$messidor_dir/1" -iname "*.jpg" -exec mv {} "$output_dir/1/." \;
-#
-## Convert the data set to tfrecords.
-#echo "Converting data set to tfrecords..."
-#git submodule update --init
-#
-#python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir" \
-#       --num_shards=2 || \
-#    { echo "Submodule not initialized. Run git submodule update --init";
-#      exit 1; }
-#
-#echo "Cleaning up..."
-#rm -r "$messidor_path" "$messidor_dir/Messidor-2" "$messidor_dir/labels.csv"
-#
-#echo "Done!"
-#exit
-#
-## References:
-## [1] http://latim.univ-brest.fr/messidor2/
-## [2] https://www.kaggle.com/google-brain/messidor2-dr-grades
+
+echo "Preparing data set..."
+mkdir -p "$output_dir/0" "$output_dir/1"
+
+echo "Moving images to new directories..."
+find "$messidor_dir/"[0-1] -iname "*.jpg" -exec mv {} "$output_dir/0/." \;
+find "$messidor_dir/"[2-4] -iname "*.jpg" -exec mv {} "$output_dir/1/." \;
+
+echo "Removing old directories..."
+rmdir "$messidor_dir/"[0-4]
+
+# Convert the data set to tfrecords.
+echo "Converting data set to tfrecords..."
+git submodule update --init
+
+python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir" \
+       --num_shards=2 || \
+    { echo "Submodule not initialized. Run git submodule update --init";
+      exit 1; }
+
+echo "Cleaning up..."
+# rm -r "$messidor_volume_files" "$messidor_dir/IMAGES" "$messidor_dir/$dr_grades_file"
+rm -r "$messidor_dir/IMAGES" "$messidor_dir/$dr_grades_file"
+
+echo "Done!"
+exit
+
+# References:
+# [1] http://latim.univ-brest.fr/messidor2/
+# [2] https://www.kaggle.com/google-brain/messidor2-dr-grades

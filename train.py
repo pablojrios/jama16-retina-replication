@@ -37,7 +37,7 @@ os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "6"
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # The GPU id to use, usually either "0" or "1"
 # Con 0 usa GeForce GTX 1050 Ti
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 random.seed(432)
@@ -171,8 +171,7 @@ for layer in base_model.layers:
         print("setting layer {} trainable".format(layer.name))
     else:
         layer.trainable = False
-base_model.summary()
-display_model_params()
+
 
 if use_sgd:
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
@@ -190,7 +189,7 @@ predictions = tf.sigmoid(logits, name='predictions')
 retina_model = Model(inputs=base_model.inputs, outputs=logits)
 retina_model.compile(optimizer=optimizer, loss=sigmoid_cross_entropy_with_logits)
 retina_model.summary()
-display_model_params()
+
 
 # Retrieve loss of network using cross entropy.
 mean_xentropy = sigmoid_cross_entropy_with_logits(y_true=y, y_pred=logits)
