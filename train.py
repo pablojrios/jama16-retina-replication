@@ -15,7 +15,7 @@ from tensorflow.python.keras.layers import Dense
 
 def sigmoid_cross_entropy_with_logits(y_true, y_pred):
     return tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(labels=y_true, logits=y_pred))
+        tf.nn.sigmoid_cross_entropy_with_logits(labels=y_true, logits=y_pred), name="Xent")
 
 
 def display_model_params():
@@ -48,6 +48,9 @@ default_val_dir = "./data/eyepacs/bin2/validation"
 default_save_model_path = "./tmp/model"
 default_save_summaries_dir = "./tmp/logs"
 default_save_operating_thresholds_path = "./tmp/validation_op_pts.csv"
+# optimizer values: 'nesterov_accelerated_gd', 'vanilla_sgd', 'adam'
+default_optimizer = "nesterov_accelerated_gd"
+
 
 parser = argparse.ArgumentParser(
                     description="Trains and saves neural network for "
@@ -67,9 +70,12 @@ parser.add_argument("-ss", "--save_summaries_dir",
 parser.add_argument("-so", "--save_operating_thresholds_path",
                     help="path to where operating points should be saved",
                     default=default_save_operating_thresholds_path)
-parser.add_argument("-sgd", "--vanilla_sgd", action="store_true",
-                    help="use vanilla stochastic gradient descent instead of "
-                         "nesterov accelerated gradient descent")
+# parser.add_argument("-sgd", "--vanilla_sgd", action="store_true",
+#                     help="use vanilla stochastic gradient descent instead of "
+#                          "nesterov accelerated gradient descent")
+parser.add_argument("-opt", "--optimizer",
+                    help="optimizer algorithms: nesterov_accelerated_gd (default), vanilla_sgd, adam",
+                    default=default_optimizer)
 parser.add_argument("-ld", "--large_diameter", action="store_true",
                     help="diameter of fundus to 512 pixels")
 
@@ -79,7 +85,7 @@ val_dir = str(args.val_dir)
 save_model_path = str(args.save_model_path)
 save_summaries_dir = str(args.save_summaries_dir)
 save_operating_thresholds_path = str(args.save_operating_thresholds_path)
-use_sgd = bool(args.vanilla_sgd)
+optimizer_name = args.optimizer
 large_diameter = bool(args.large_diameter)
 
 print("""
@@ -88,10 +94,10 @@ Validation images folder: {},
 Saving model and graph checkpoints at: {},
 Saving summaries at: {},
 Saving operating points at: {},
-Use SGD: {},
+Optimizer: {},
 Large diameter: {}
 """.format(train_dir, val_dir, save_model_path, save_summaries_dir,
-           save_operating_thresholds_path, use_sgd, large_diameter))
+           save_operating_thresholds_path, optimizer_name, large_diameter))
 
 # Various constants.
 num_channels = 3
@@ -101,15 +107,35 @@ num_workers = 8
 learning_rate = 3e-3
 momentum = 0.9  # Only used when not training with momentum optimizer
 use_nesterov = True  # Only used when not training with momentum optimizer
-train_batch_size = 32 if large_diameter else 64
+if optimizer_name == 'adam':
+    train_batch_size = 32
+else:
+    train_batch_size = 32 if large_diameter else 64
+
+# Hyper-parameters for training (arXiv:1710.01711)
+# – Input image resolution: 299 × 299
+# – Learning rate: 0.001
+# – Batch size: 32
+# – Weight decay: 4 · 10−5
+# – An Adam optimizer with β1 = 0.9, β2 = 0.999, and epsilon = 0.1
+adam_learning_rate = 1e-3
+beta1 = 0.9
+beta2 = 0.999
+epsilon = 0.1
 
 # Hyper-parameters for validation.
 num_epochs = 200
 wait_epochs = 10
 min_delta_auc = 0.01
-val_batch_size = 32 if large_diameter else 64
+if optimizer_name == 'adam':
+    val_batch_size = 32
+else:
+    val_batch_size = 32 if large_diameter else 64
 num_thresholds = 200
 kepsilon = 1e-7
+
+# no funcionó, se obtienen resultados diferentes en 2 corridas
+# tf.set_random_seed(12345)
 
 # Define thresholds.
 thresholds = lib.metrics.generate_thresholds(num_thresholds, kepsilon) + [0.5]
@@ -150,9 +176,10 @@ val_dataset = lib.dataset.initialize_dataset(
 iterator = tf.data.Iterator.from_structure(
     train_dataset.output_types, train_dataset.output_shapes)
 
-images, labels = iterator.get_next()
+images, labels, fileids = iterator.get_next()
 x = tf.placeholder_with_default(images, images.shape, name='x')
 y = tf.placeholder_with_default(labels, labels.shape, name='y')
+fileid = tf.placeholder_with_default(fileids, fileids.shape, name='fileid')
 
 train_init_op = iterator.make_initializer(train_dataset)
 val_init_op = iterator.make_initializer(val_dataset)
@@ -161,24 +188,31 @@ val_init_op = iterator.make_initializer(val_dataset)
 base_model = tf.keras.applications.InceptionV3(
     include_top=False, weights='imagenet', pooling='avg', input_tensor=x)
 
-base_model.trainable = True
-set_trainable = False
-for layer in base_model.layers:
-    if layer.name == 'mixed9':
-        set_trainable = True
-    if set_trainable:
-        layer.trainable = True
-        print("setting layer {} trainable".format(layer.name))
-    else:
-        layer.trainable = False
+# hay que ajustar los pesos de todas las capas para obtener mejor AUC
+# base_model.trainable = True
+# set_trainable = False
+# for layer in base_model.layers:
+#     if layer.name == 'mixed9':
+#         set_trainable = True
+#         # pass
+#     if set_trainable:
+#         layer.trainable = True
+#         print("setting layer {} trainable".format(layer.name))
+#     else:
+#         layer.trainable = False
 
 
-if use_sgd:
+if optimizer_name == 'vanilla_sgd':
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+elif optimizer_name == 'adam':
+    optimizer = tf.train.AdamOptimizer(learning_rate=adam_learning_rate,
+                                       beta1=beta1, beta2=beta2, epsilon=epsilon)
 else:
     optimizer = tf.train.MomentumOptimizer(
         learning_rate=learning_rate, momentum=momentum,
         use_nesterov=use_nesterov)
+
+# tvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
 # Add dense layer with the same amount of neurons as labels.
 logits = tf.layers.dense(base_model.output, units=1)
@@ -186,10 +220,10 @@ logits = tf.layers.dense(base_model.output, units=1)
 # Get the predictions with a sigmoid activation function.
 predictions = tf.sigmoid(logits, name='predictions')
 
-retina_model = Model(inputs=base_model.inputs, outputs=logits)
-retina_model.compile(optimizer=optimizer, loss=sigmoid_cross_entropy_with_logits)
-retina_model.summary()
-
+# hay que ajustar los pesos de todas las capas para obtener mejor AUC
+# retina_model = Model(inputs=base_model.inputs, outputs=logits)
+# retina_model.compile(optimizer=optimizer, loss=sigmoid_cross_entropy_with_logits)
+# retina_model.summary()
 
 # Retrieve loss of network using cross entropy.
 mean_xentropy = sigmoid_cross_entropy_with_logits(y_true=y, y_pred=logits)
@@ -197,7 +231,16 @@ mean_xentropy = sigmoid_cross_entropy_with_logits(y_true=y, y_pred=logits)
 # Define optimizer.
 global_step = tf.Variable(0, dtype=tf.int32)
 
+# train_op = optimizer.minimize(loss=mean_xentropy, global_step=global_step, var_list=retina_model.trainable_variables)
 train_op = optimizer.minimize(loss=mean_xentropy, global_step=global_step)
+
+# Print all of the operations in the default graph.
+# g = tf.get_default_graph()
+# print(g.get_operations())
+# otra forma de imprimir todos los nodos (operaciones) del grafo
+# [n.name for n in tf.get_default_graph().as_graph_def().node if "dense" in n.name]
+# obtener un tensor del grafo por nombre
+# tf.get_default_graph().get_tensor_by_name("dense/kernel:0")
 
 # Metrics for finding best validation set.
 tp, update_tp, reset_tp = lib.metrics.create_reset_metric(

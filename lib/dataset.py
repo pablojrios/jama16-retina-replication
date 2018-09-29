@@ -1,6 +1,6 @@
 import tensorflow as tf
 import os
-
+import numpy as np
 
 def _tfrecord_dataset_from_folder(folder, ext='.tfrecord'):
     tfrecords = [os.path.join(folder, n)
@@ -8,8 +8,14 @@ def _tfrecord_dataset_from_folder(folder, ext='.tfrecord'):
     return tf.data.TFRecordDataset(tfrecords)
 
 
+def _decode_and_length_map(encoded_string):
+    decoded = tf.decode_raw(encoded_string, out_type=tf.uint8)
+    return decoded, tf.shape(decoded)[0]
+
+
 def _parse_example(proto, num_channels, image_data_format):
-    features = {"image/encoded": tf.FixedLenFeature((), tf.string),
+    features = {"image/fileid": tf.FixedLenFeature((), tf.int64),
+                "image/encoded": tf.FixedLenFeature((), tf.string),
                 "image/format": tf.FixedLenFeature((), tf.string),
                 "image/class/label": tf.FixedLenFeature((), tf.int64),
                 "image/height": tf.FixedLenFeature((), tf.int64),
@@ -27,7 +33,12 @@ def _parse_example(proto, num_channels, image_data_format):
         tf.reshape(parsed["image/class/label"], [-1]),
         tf.float32)
 
-    return image, label
+    fileid = tf.cast(
+        tf.reshape(parsed["image/fileid"], [-1]),
+        tf.float32)
+
+    #todo: return filename
+    return image, label, fileid
 
 
 def initialize_dataset(image_dir, batch_size, num_epochs=1,

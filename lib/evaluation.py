@@ -1,5 +1,7 @@
 import tensorflow as tf
 import numpy as np
+import pandas as pd
+from os.path import join
 
 def _get_operations_by_names(graph, names):
     return [graph.get_operation_by_name(name) for name in names]
@@ -79,3 +81,24 @@ def perform_test(sess, init_op, summary_writer=None, epoch=None,
     print(test_conf_matrix[0])
 
     return test_auc
+
+
+def write_predictions_file(image_fileids, labels, predictions, data_dir, image_ids_filename, predictions_filename):
+
+    with tf.gfile.Open(predictions_filename, 'w') as f:
+        f.write("image_id,label,prediction\n")
+        for id, label, prediction in zip(image_fileids, labels, predictions):
+            f.write(f"{id[0]:.0f},{label[0]:.0f},{prediction[0]:4.2f}\n")
+
+    filenames_file = join(data_dir, image_ids_filename)
+    filenames_ds = pd.read_csv(filenames_file)
+
+    predictions_ds = pd.read_csv(predictions_filename)
+
+    inner_join_ds = pd.merge(predictions_ds, filenames_ds, how='left', left_on=['image_id'], right_on=['id'])
+    inner_join_ds.drop(['id'], axis=1, inplace=True)
+    inner_join_ds.sort_values(by=['prediction'], ascending=False, inplace=True)
+
+    inner_join_ds.to_csv(predictions_filename, encoding='utf-8', index=False)
+
+

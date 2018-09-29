@@ -6,14 +6,16 @@
 # Assumes annotation file is ./vendor/messidor/messidor_data.csv.
 # sed -i 's/\.jpg/\.JPG/g' messidor_data.csv
 
+# rar a -v819200k IMAGESv2 IMAGES/ (4 archivos de 800Mb cada uno)
+
 messidor_dir="./data/messidor2"
 vendor_messidor_dir="./vendor/messidor"
-messidor_volume1_path="$messidor_dir/IMAGES.part1.rar"
-messidor_volume_files="IMAGES.part*.rar"
+messidor_volume1_path="$messidor_dir/IMAGESv2.part01.rar"
+messidor_volume_files="IMAGESv2.part*.rar"
 default_output_dir="$messidor_dir/bin2"
 # gradability grades is only from messidor-1 dataset
 grad_grades_file="messidor_gradability_grades.csv"
-dr_grades_file="messidor_data.csv"
+dr_grades_file="messidor-2_data.csv"
 
 print_usage()
 {
@@ -72,11 +74,11 @@ if [ ! -f "$vendor_messidor_dir/$dr_grades_file" ]; then
 fi
 
 count_files=0
-if [ -d "$messidor_dir/IMAGES" ]; then
-  count_files=$(ls "$messidor_dir/IMAGES" | egrep 'png|JPG' 2>/dev/null | wc -l)
+if [ -d "$messidor_dir/IMAGESv2" ]; then
+  count_files=$(ls "$messidor_dir/IMAGESv2" | egrep 'tif|JPG' 2>/dev/null | wc -l)
 fi
 
-if [[ $count_files -ne 1748 ]]; then
+if [[ $count_files -ne 1890 ]]; then
   # Check if unrar has been installed.
   dpkg -l | grep unrar 2>&1 1>/dev/null
   if [ $? -gt 0 ]; then
@@ -84,7 +86,7 @@ if [[ $count_files -ne 1748 ]]; then
     exit 1
   fi
 
-  if [ -d "$messidor_dir/IMAGES" ] && [[ $count_files -ne 1748 ]]; then
+  if [ -d "$messidor_dir/IMAGESv2" ] && [[ $count_files -ne 1890 ]]; then
     echo "Messidor-2 wasn't unpacked properly before, there are $count_files (expected: 1748)"
   fi
 
@@ -92,7 +94,7 @@ if [[ $count_files -ne 1748 ]]; then
   rar_count=$(find "$messidor_dir" -maxdepth 1 -iname "$messidor_volume_files" | wc -l)
 
   if [ $rar_count -ne 4 ]; then
-    echo "$messidor_dir does not contain all IMAGES.part<i>.rar files! There are $rar_count files (expected: 4)"
+    echo "$messidor_dir does not contain all IMAGESv2.part<i>.rar files! There are $rar_count files (expected: 4)"
     exit 1
   fi
 
@@ -136,7 +138,7 @@ python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir" \
 
 echo "Cleaning up..."
 # rm -r "$messidor_volume_files" "$messidor_dir/IMAGES" "$messidor_dir/$dr_grades_file"
-rm -r "$messidor_dir/IMAGES" "$messidor_dir/$dr_grades_file"
+rm -r "$messidor_dir/IMAGESv2" "$messidor_dir/$dr_grades_file"
 
 echo "Done!"
 exit

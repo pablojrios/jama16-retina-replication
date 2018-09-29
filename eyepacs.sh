@@ -182,9 +182,18 @@ if echo "$@" | grep -c -- "--only_gradable" >/dev/null; then
   bin2_0_tr_cnt=31106
   bin2_1_tr_cnt=12582
 else
-  bin2_0_cnt=48784
-  bin2_0_tr_cnt=40688
-  bin2_1_tr_cnt=16458
+  # bin2_0_cnt=48784 # training clase 0 + testing clase 0
+  # bin2_0_tr_cnt=40688 # training clase 0
+
+  # incluyo menos imágenes de clase 0 binaria para balancear el dataset, performance modelo decae ?
+  bin2_0_cnt=38596 # training clase 0 + testing clase 0
+  bin2_0_tr_cnt=30500 # training clase 0
+
+  # 'incluyo más imágenes clase 0 binaria de kaggle que los noruegos'
+  # bin2_0_cnt=68096 # training clase 0 + testing clase 0
+  # bin2_0_tr_cnt=60000 # training clase 0
+
+  bin2_1_tr_cnt=16458 # training clase 1 (total clase 1: 17152)
   # cantidades para dataset pequeño en eyepacs_small
   # bin2_0_cnt=160
   # bin2_0_tr_cnt=110
@@ -244,6 +253,8 @@ python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir/train" \
 echo "Moving validation tfrecords to separate folder."
 find "$output_dir/train" -name "validation*.tfrecord" -exec mv {} "$output_dir/validation/." \;
 find "$output_dir/train" -maxdepth 1 -iname "*.txt" -exec cp {} "$output_dir/validation/." \;
+# image_ids_validation.csv
+find "$output_dir/train" -maxdepth 1 -iname "*validation.csv" -exec mv {} "$output_dir/validation/." \;
 
 python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir/test" \
        --num_shards=4 || exit 1

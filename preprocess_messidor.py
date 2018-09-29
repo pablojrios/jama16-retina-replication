@@ -8,6 +8,9 @@ from glob import glob
 from os import makedirs, rename
 from os.path import join, splitext, basename, exists
 from lib.preprocess import scale_normalize
+import csv
+
+dr_grades_file="messidor-1_data.csv"
 
 parser = argparse.ArgumentParser(description='Preprocess Messidor-Original data set.')
 parser.add_argument("--data_dir", help="Directory where Messidor-Original resides.",
@@ -35,6 +38,11 @@ shards_paths = glob(join(data_dir, "*.zip"))
 diameter = 512 if large_diameter else 299
 print("Large fundus diameter={}".format(large_diameter))
 
+dr_grades_file_path = join(data_dir, dr_grades_file)
+print("Generating annotations file {}".format(dr_grades_file_path))
+out = csv.writer(open(dr_grades_file_path, "w"), delimiter=',')
+out.writerow(['image_name', 'retinopathy_grade', 'risk_of_macular_edema'])
+
 for shard in shards_paths:
     shard_name = splitext(basename(shard))[0]
     shard_unpack_dir = join(data_dir, shard_name)
@@ -58,6 +66,9 @@ for shard in shards_paths:
     for num, row in enumerate(range(1, worksheet.nrows)):
         filename = worksheet.cell(row, 0).value
         grade = worksheet.cell(row, 2).value
+        dme = worksheet.cell(row, 3).value
+
+        out.writerow([filename, int(grade), int(dme)])
 
         im_path = glob(join(shard_unpack_dir, "**/{}".format(filename)),
                        recursive=True)[0]

@@ -10,6 +10,7 @@ import lib.evaluation
 import lib.metrics
 import csv
 from glob import glob
+from lib.evaluation import write_predictions_file
 
 print(f"Numpy version: {np.__version__}")
 print(f"Tensorflow version: {tf.__version__}")
@@ -24,6 +25,8 @@ default_messidor2_dir = "./data/messidor2/bin2"
 default_load_model_path = "./tmp/model"
 default_save_operating_thresholds_path = "./tmp/test_op_pts.csv"
 default_batch_size = 32
+default_save_predictions_filepath = "./tmp/test_predictions.csv"
+IMAGE_IDS_FILENAME = 'image_ids.csv'
 
 parser = argparse.ArgumentParser(
                     description="Evaluate performance of trained graph "
@@ -50,6 +53,9 @@ parser.add_argument("-b", "--batch_size",
                     help="batch size", default=default_batch_size)
 parser.add_argument("-op", "--operating_threshold",
                     help="operating threshold", default=0.5)
+parser.add_argument("-p", "--save_predictions_filepath",
+                    help="path to where predictions should be saved",
+                    default=default_save_predictions_filepath)
 
 args = parser.parse_args()
 
@@ -75,6 +81,7 @@ load_model_path = str(args.load_model_path)
 batch_size = int(args.batch_size)
 save_operating_thresholds_path = str(args.save_operating_thresholds_path)
 operating_threshold = float(args.operating_threshold)
+save_predictions_filepath = str(args.save_predictions_filepath)
 
 # Check if the model path has comma-separated entries.
 if "," in load_model_path:
@@ -90,8 +97,9 @@ else:
 print("""
 Evaluating: {},
 Saving operating thresholds metrics at: {},
+Saving predictions at: {},
 Using operating treshold: {},
-""".format(data_dir, save_operating_thresholds_path, operating_threshold))
+""".format(data_dir, save_operating_thresholds_path, default_save_predictions_filepath, operating_threshold))
 print("Trying to load model(s):\n{}".format("\n".join(load_model_paths)))
 
 # Other setting variables.
@@ -114,13 +122,15 @@ else:
 
 got_all_y = False
 all_y = []
+all_fileid = []
 
 
-def feed_images(sess, x_tensor, y_tensor, x_batcher, y_batcher):
-    _x, _y = sess.run([x_batcher, y_batcher])
+def feed_images(sess, x_tensor, y_tensor, fileid_tensor, x_batcher, y_batcher, fileid_batcher):
+    _x, _y, _fileid = sess.run([x_batcher, y_batcher, fileid_batcher])
     if not got_all_y:
         all_y.append(_y)
-    return {x_tensor: _x, y_tensor: _y}
+        all_fileid.append(_fileid)
+    return {x_tensor: _x, y_tensor: _y, fileid_tensor: _fileid}
 
 
 eval_graph = tf.Graph()
@@ -182,6 +192,7 @@ for model_path in load_model_paths:
         graph = tf.get_default_graph()
         x = graph.get_tensor_by_name("x:0")
         y = graph.get_tensor_by_name("y:0")
+        fileid = graph.get_tensor_by_name("fileid:0")
 
         try:
             predictions = graph.get_tensor_by_name("predictions:0")
@@ -198,7 +209,7 @@ for model_path in load_model_paths:
         iterator = tf.data.Iterator.from_structure(
             test_dataset.output_types, test_dataset.output_shapes)
 
-        test_images, test_labels = iterator.get_next()
+        test_images, test_labels, test_fileids = iterator.get_next()
 
         test_init_op = iterator.make_initializer(test_dataset)
 
@@ -206,8 +217,8 @@ for model_path in load_model_paths:
         test_predictions = lib.evaluation.perform_test(
             sess=sess, init_op=test_init_op,
             feed_dict_fn=feed_images,
-            feed_dict_args={"sess": sess, "x_tensor": x, "y_tensor": y,
-                            "x_batcher": test_images, "y_batcher": test_labels},
+            feed_dict_args={"sess": sess, "x_tensor": x, "y_tensor": y, "fileid_tensor": fileid,
+                            "x_batcher": test_images, "y_batcher": test_labels, "fileid_batcher": test_fileids},
             custom_tensors=[predictions])
 
         all_predictions.append(test_predictions[0])
@@ -223,6 +234,11 @@ avg_pred = np.mean(all_predictions, axis=0)
 
 # Convert all labels to numpy array.
 all_y = np.vstack(all_y)
+
+# Convert all image file ids to numpy array.
+all_fileid = np.vstack(all_fileid)
+
+write_predictions_file(all_fileid, all_y, avg_pred, data_dir, IMAGE_IDS_FILENAME, save_predictions_filepath)
 
 # Use these predictions for printing evaluation results.
 with tf.Session(graph=eval_graph) as sess:

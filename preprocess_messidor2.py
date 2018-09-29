@@ -16,7 +16,7 @@ args = parser.parse_args()
 data_dir = str(args.data_dir)
 large_diameter = bool(args.large_diameter)
 
-labels = join(data_dir, 'messidor_data.csv')
+labels = join(data_dir, 'messidor-2_data.csv')
 
 # Create directories for grades.
 [makedirs(join(data_dir, str(i))) for i in [0, 1, 2, 3, 4]
@@ -49,7 +49,7 @@ with open(labels, 'r') as f:
             failed_images.append(basename)
             continue
 
-        im_path = join(data_dir, "IMAGES/{}".format(basename))
+        im_path = join(data_dir, "IMAGESv2/{}".format(basename))
 
         # Find contour of eye fundus in image, and scale
         #  diameter of fundus to 299 pixels and crop the edges.

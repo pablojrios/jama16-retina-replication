@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-def augment(images, labels,
+def augment(image, label,
             resize=None, # (width, height) tuple or None
             horizontal_flip=False,
             vertical_flip=False,
@@ -11,21 +11,14 @@ def augment(images, labels,
             crop_min_percent=0.6, # Minimum linear dimension of a crop
             crop_max_percent=1.,  # Maximum linear dimension of a crop
             mixup=0):  # Mixup coeffecient, see https://arxiv.org/abs/1710.09412.pdf
-  if resize is not None:
-    images = tf.image.resize_bilinear(images, resize)
-  
+
   # My experiments showed that casting on GPU improves training performance
-  if images.dtype != tf.float32:
-    images = tf.image.convert_image_dtype(images, dtype=tf.float32)
-    images = tf.subtract(images, 0.5)
-    images = tf.multiply(images, 2.0)
-  labels = tf.to_float(labels)
+  label = tf.to_float(label)
 
   with tf.name_scope('augmentation'):
-    shp = tf.shape(images)
-    batch_size, height, width = shp[0], shp[1], shp[2]
-    width = tf.cast(width, tf.float32)
-    height = tf.cast(height, tf.float32)
+    shp = tf.shape(image)
+    width = tf.cast(shp[1], tf.float32)
+    height = tf.cast(shp[2], tf.float32)
 
     # The list of affine transformations that our image will go under.
     # Every element is Nx8 tensor, where N is a batch size.

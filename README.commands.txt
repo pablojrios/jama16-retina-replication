@@ -5,6 +5,25 @@ Pre-processing:
 --------------
 ./messidor2.sh --output_dir=./data/messidor2/bin
 ./messidor2.sh --output_dir=./data/messidor2/bin2.512 --large_diameter
+./messidor2.sh --output_dir=./data/messidor2/bin2.512.v2/ --large_diameter
+./eyepacs.sh --redistribute --pool_dir=./data/eyepacs/pool512/ --seed=12345 --large_diameter --output_dir=./data/eyepacs/bin2.22sept/
+./eyepacs.sh --redistribute --pool_dir=./data/eyepacs/pool512/ --large_diameter --output_dir=./data/eyepacs/bin2.512.filename/
+    Finding images...
+    Found 65337 images in class 0.
+    Found 6203 images in class 1.
+    Found 13151 images in class 2.
+    Found 2087 images in class 3.
+    Found 1914 images in class 4.
+    Creating directories for data sets
+    Gathering 60000 images for train set (0/2)
+    Gathering 16458 images for train set (1/2)
+    Gathering 8096 images for test set (0/2)
+    Gathering 694 images for test set (1/2)
+    >> Converting image 61167/61167 shard 7
+    >> Converting image 15291/15291 shard 7
+    >> Converting image 8790/8790 shard 3
+./eyepacs.sh --redistribute --pool_dir=./data/eyepacs/pool512/ --large_diameter --output_dir=./data/eyepacs/bin2.512.balance/
+
 
 Testing Ensambles:
 -----------------
@@ -13,8 +32,9 @@ python evaluate.py -m --data_dir=./data/messidor/bin2.512/ --load_model_path=./t
 
 Training:
 --------
-python train.py --train_dir=./data/eyepacs/bin2.512/train/ --val_dir ./data/eyepacs/bin2.512/validation/ --large_diameter
-python train.py --train_dir=./data/eyepacs/bin2/train/ --val_dir ./data/eyepacs/bin2/validation/
+python train.py --train_dir=./data/eyepacs/bin2.512/train/ --val_dir=./data/eyepacs/bin2.512/validation/ --large_diameter
+python train.py --train_dir=./data/eyepacs/bin2/train/ --val_dir=./data/eyepacs/bin2/validation/
+python train.py --train_dir=./data/eyepacs/bin2/train/ --val_dir=./data/eyepacs/bin2/validation/ --optimizer=adam
 
 Testing:
 -------
