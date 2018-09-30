@@ -1,3 +1,4 @@
-# [submodule "create_tfrecords"]
-#	path = create_tfrecords
-#	url = https://github.com/mikevoets/create_tfrecords.git
+[submodule "create_tfrecords"]
+	path = create_tfrecords
+	url = https://github.com/pablojrios/create_tfrecords.git
+	branch = arXiv/1803.04337v2
