@@ -110,7 +110,7 @@ use_nesterov = True  # Only used when not training with momentum optimizer
 if optimizer_name == 'adam':
     train_batch_size = 32
 else:
-    train_batch_size = 32 if large_diameter else 64
+    train_batch_size = 24 if large_diameter else 64
 
 # Hyper-parameters for training (arXiv:1710.01711)
 # – Input image resolution: 299 × 299
@@ -130,7 +130,7 @@ min_delta_auc = 0.01
 if optimizer_name == 'adam':
     val_batch_size = 32
 else:
-    val_batch_size = 32 if large_diameter else 64
+    val_batch_size = 24 if large_diameter else 64
 num_thresholds = 200
 kepsilon = 1e-7
 
@@ -185,8 +185,9 @@ train_init_op = iterator.make_initializer(train_dataset)
 val_init_op = iterator.make_initializer(val_dataset)
 
 # Base model InceptionV3 without top and global average pooling.
-base_model = tf.keras.applications.InceptionV3(
+base_model = tf.keras.applications.ResNet50(
     include_top=False, weights='imagenet', pooling='avg', input_tensor=x)
+base_model.summary()
 
 # hay que ajustar los pesos de todas las capas para obtener mejor AUC
 # base_model.trainable = True
