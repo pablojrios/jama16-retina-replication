@@ -182,12 +182,12 @@ if echo "$@" | grep -c -- "--only_gradable" >/dev/null; then
   bin2_0_tr_cnt=31106
   bin2_1_tr_cnt=12582
 else
-  # bin2_0_cnt=48784 # training clase 0 + testing clase 0
-  # bin2_0_tr_cnt=40688 # training clase 0
+  bin2_0_cnt=48784 # training clase 0 + testing clase 0
+  bin2_0_tr_cnt=40688 # training clase 0
 
   # incluyo menos imágenes de clase 0 binaria para balancear el dataset, performance modelo decae ?
-  bin2_0_cnt=38596 # training clase 0 + testing clase 0
-  bin2_0_tr_cnt=30500 # training clase 0
+  # bin2_0_cnt=38596 # training clase 0 + testing clase 0
+  # bin2_0_tr_cnt=30500 # training clase 0
 
   # 'incluyo más imágenes clase 0 binaria de kaggle que los noruegos'
   # bin2_0_cnt=68096 # training clase 0 + testing clase 0

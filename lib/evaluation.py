@@ -88,7 +88,7 @@ def write_predictions_file(image_fileids, labels, predictions, data_dir, image_i
     with tf.gfile.Open(predictions_filename, 'w') as f:
         f.write("image_id,label,prediction\n")
         for id, label, prediction in zip(image_fileids, labels, predictions):
-            f.write(f"{id[0]:.0f},{label[0]:.0f},{prediction[0]:4.2f}\n")
+            f.write(f"{id[0]:.0f},{label[0]:.0f},{prediction[0]:4.3f}\n")
 
     filenames_file = join(data_dir, image_ids_filename)
     filenames_ds = pd.read_csv(filenames_file)

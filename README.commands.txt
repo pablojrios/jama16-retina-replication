@@ -22,7 +22,7 @@ Pre-processing:
     >> Converting image 61167/61167 shard 7
     >> Converting image 15291/15291 shard 7
     >> Converting image 8790/8790 shard 3
-./eyepacs.sh --redistribute --pool_dir=./data/eyepacs/pool512/ --large_diameter --output_dir=./data/eyepacs/bin2.512.balance/
+./eyepacs.sh --redistribute --pool_dir=./data/eyepacs/pool512/ --large_diameter --output_dir=./data/eyepacs/bin2.512.gradonly/
 
 
 Testing Ensambles:
@@ -41,3 +41,6 @@ Testing:
 python evaluate.py -e --data_dir=./data/eyepacs/bin2.512/test/ --load_model_path=./tmp.18sept/model -so=./tmp.18sept/kaggle_test_op_pts.csv
 python evaluate.py -m --data_dir=./data/messidor/bin2.512/ --load_model_path=./tmp.18sept/model -so=./tmp.18sept/messidor_test_op_pts.csv
 python evaluate.py -m2 --data_dir=./data/messidor2/bin2.512/ --load_model_path=./tmp.18sept/model -so=./tmp.18sept/messidor-2_test_op_pts.csv
+
+python evaluate.py -e --data_dir=./data/eyepacs/bin2.512.fileid/test/ --load_model_path=./tmp/model -so=./tmp/kaggle_test_op_pts.csv -p=./tmp/kaggle_test_predictions.csv
+python evaluate.py -m2 --data_dir=./data/messidor2/bin2.512.fileid/ --load_model_path=./tmp/model -so=./tmp/messidor2_test_op_pts.csv -p=./tmp/messidor2_test_predictions.csv -op=0.1658
