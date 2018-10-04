@@ -10,7 +10,8 @@ import lib.metrics
 import lib.dataset
 import lib.evaluation
 from tensorflow.python.keras import Model
-from tensorflow.python.keras.layers import Dense
+from tensorflow.python.keras.layers import Dense, Dropout
+from tensorflow.python.keras.activations import sigmoid
 
 
 def sigmoid_cross_entropy_with_logits(y_true, y_pred):
@@ -74,7 +75,7 @@ parser.add_argument("-so", "--save_operating_thresholds_path",
 #                     help="use vanilla stochastic gradient descent instead of "
 #                          "nesterov accelerated gradient descent")
 parser.add_argument("-opt", "--optimizer",
-                    help="optimizer algorithms: nesterov_accelerated_gd (default), vanilla_sgd, adam",
+                    help="optimizer algorithms: nesterov_accelerated_gd (default), vanilla_sgd, rmsprop",
                     default=default_optimizer)
 parser.add_argument("-ld", "--large_diameter", action="store_true",
                     help="diameter of fundus to 512 pixels")
@@ -104,33 +105,44 @@ num_channels = 3
 num_workers = 8
 
 # Hyper-parameters for training.
-learning_rate = 3e-3
+learning_rate = 5e-3
 momentum = 0.9  # Only used when not training with momentum optimizer
 use_nesterov = True  # Only used when not training with momentum optimizer
-if optimizer_name == 'adam':
-    train_batch_size = 32
+if optimizer_name == 'rmsprop':
+    train_batch_size = 64
 else:
-    train_batch_size = 24 if large_diameter else 64
+    train_batch_size = 32 if large_diameter else 64
+
+# ver https://github.com/tensorflow/models/blob/master/research/inception/inception/inception_train.py
+# como entrenan an Inception v3 network from scratch, usando RMSPropOptimizer
 
 # Hyper-parameters for training (arXiv:1710.01711)
 # – Input image resolution: 299 × 299
 # – Learning rate: 0.001
 # – Batch size: 32
 # – Weight decay: 4 · 10−5
+# Constants dictating the learning rate schedule.
+rmsprop_learning_rate = 0.001
+rmsprop_decay = 0.9                # Decay term for RMSProp.
+rmsprop_momentum = 0.9             # Momentum in RMSProp.
+rmsprop_epsilon = 1.0              # Epsilon term for RMSProp.
+# Decay the learning rate exponentially based on the number of steps.
+# decayed_learning_rate = learning_rate * decay_rate ^ (global_step / decay_steps)
+
 # – An Adam optimizer with β1 = 0.9, β2 = 0.999, and epsilon = 0.1
-adam_learning_rate = 1e-3
-beta1 = 0.9
-beta2 = 0.999
-epsilon = 0.1
+# adam_learning_rate = 1e-3
+# beta1 = 0.9
+# beta2 = 0.999
+# epsilon = 0.1
 
 # Hyper-parameters for validation.
 num_epochs = 200
 wait_epochs = 10
 min_delta_auc = 0.01
-if optimizer_name == 'adam':
-    val_batch_size = 32
+if optimizer_name == 'rmsprop':
+    val_batch_size = 64
 else:
-    val_batch_size = 24 if large_diameter else 64
+    val_batch_size = 32 if large_diameter else 64
 num_thresholds = 200
 kepsilon = 1e-7
 
@@ -145,6 +157,8 @@ shuffle_buffer_size = 1024 if large_diameter else 2048
 prefetch_buffer_size = 2 * train_batch_size
 
 # Set image datas format to channels first if GPU is available.
+# Este post explica porqué channels_first is preferred !
+# https://stackoverflow.com/questions/44774234/why-tensorflow-uses-channel-last-ordering-instead-of-row-major
 if tf.test.is_gpu_available():
     print("Found GPU! Using channels first as default image data format.")
     image_data_format = 'channels_first'
@@ -185,9 +199,8 @@ train_init_op = iterator.make_initializer(train_dataset)
 val_init_op = iterator.make_initializer(val_dataset)
 
 # Base model InceptionV3 without top and global average pooling.
-base_model = tf.keras.applications.ResNet50(
+base_model = tf.keras.applications.InceptionV3(
     include_top=False, weights='imagenet', pooling='avg', input_tensor=x)
-base_model.summary()
 
 # hay que ajustar los pesos de todas las capas para obtener mejor AUC
 # base_model.trainable = True
@@ -202,18 +215,51 @@ base_model.summary()
 #     else:
 #         layer.trainable = False
 
+# Define optimizer.
+global_step = tf.Variable(0, dtype=tf.int32)
 
 if optimizer_name == 'vanilla_sgd':
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-elif optimizer_name == 'adam':
-    optimizer = tf.train.AdamOptimizer(learning_rate=adam_learning_rate,
-                                       beta1=beta1, beta2=beta2, epsilon=epsilon)
+# elif optimizer_name == 'adam':
+#     optimizer = tf.train.AdamOptimizer(learning_rate=adam_learning_rate,
+#                                        beta1=beta1, beta2=beta2, epsilon=epsilon)
+elif optimizer_name == 'rmsprop':
+    # Create an optimizer that performs gradient descent.
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=rmsprop_learning_rate,
+                                    decay=rmsprop_decay,
+                                    momentum=rmsprop_momentum,
+                                    epsilon=rmsprop_momentum)
 else:
     optimizer = tf.train.MomentumOptimizer(
         learning_rate=learning_rate, momentum=momentum,
         use_nesterov=use_nesterov)
 
 # tvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+
+# from https://www.kaggle.com/shuyuan00/resnet50-with-0-985lb/code
+#
+# global_average_pooling2d (Globa (None, 2048)         0           mixed10[0][0]
+# __________________________________________________________________________________________________
+# fc1_Dense (Dense)               (None, 1024)         2098176     global_average_pooling2d[0][0]
+# __________________________________________________________________________________________________
+# dropout_1 (Dropout)             (None, 1024)         0           fc1_Dense[0][0]
+# __________________________________________________________________________________________________
+# fc2_Dense (Dense)               (None, 256)          262400      dropout_1[0][0]
+# __________________________________________________________________________________________________
+# dropout_2 (Dropout)             (None, 256)          0           fc2_Dense[0][0]
+# __________________________________________________________________________________________________
+# output_layer (Dense)            (None, 1)            257         dropout_2[0][0]
+#
+# x_model = base_model.output
+# x_model = Dense(1024, activation='relu',name='fc1_Dense')(x_model)
+# x_model = Dropout(0.5, name='dropout_1')(x_model)
+# x_model = Dense(256, activation='relu',name='fc2_Dense')(x_model)
+# x_model = Dropout(0.5, name='dropout_2')(x_model)
+# # Add dense layer with the same amount of neurons as labels.
+# logits = Dense(units=1, name='output_layer')(x_model)
+# # Get the predictions with a sigmoid activation function.
+# predictions = tf.sigmoid(logits, name='predictions')
+
 
 # Add dense layer with the same amount of neurons as labels.
 logits = tf.layers.dense(base_model.output, units=1)
@@ -229,8 +275,6 @@ predictions = tf.sigmoid(logits, name='predictions')
 # Retrieve loss of network using cross entropy.
 mean_xentropy = sigmoid_cross_entropy_with_logits(y_true=y, y_pred=logits)
 
-# Define optimizer.
-global_step = tf.Variable(0, dtype=tf.int32)
 
 # train_op = optimizer.minimize(loss=mean_xentropy, global_step=global_step, var_list=retina_model.trainable_variables)
 train_op = optimizer.minimize(loss=mean_xentropy, global_step=global_step)
@@ -266,6 +310,7 @@ confusion_matrix = lib.metrics.confusion_matrix(
 brier, update_brier, reset_brier = lib.metrics.create_reset_metric(
     tf.metrics.mean_squared_error, scope='brier',
     labels=y, predictions=predictions)
+tf.summary.scalar('mse', brier)
 
 auc, update_auc, reset_auc = lib.metrics.create_reset_metric(
     tf.metrics.auc, scope='auc', labels=y, predictions=predictions)
@@ -276,8 +321,9 @@ sensitivities = tf.div(tp, tp + fn + kepsilon)
 
 # Merge all the summaries and write them out.
 summaries_op = tf.summary.merge_all()
-train_writer = tf.summary.FileWriter(save_summaries_dir + "/train")
-test_writer = tf.summary.FileWriter(save_summaries_dir + "/test")
+train_writer = tf.summary.FileWriter(save_summaries_dir + "/train", graph=sess.graph)
+# todo: test_writer is not used
+# test_writer = tf.summary.FileWriter(save_summaries_dir + "/test")
 
 def print_training_status(epoch, num_epochs, batch_num, xent, i_step=None):
     def length(x): return len(str(x))
@@ -306,6 +352,7 @@ sess.run(tf.local_variables_initializer())
 #  is reached.
 latest_peak_auc = 0
 waited_epochs = 0
+latest_absolute_peak_auc = 0 # siempre me quedo con el mejor modelo aunque la mejora sea < min_delta_auc
 
 for epoch in range(num_epochs):
     print("")
@@ -341,6 +388,14 @@ for epoch in range(num_epochs):
         sess=sess, init_op=val_init_op,
         summary_writer=train_writer, epoch=epoch)
 
+    # check for early stop
+    if val_auc > latest_absolute_peak_auc:
+        latest_absolute_peak_auc = val_auc
+        print(f"New peak auc reached: {val_auc:10.8}")
+
+        # Save the model weights.
+        saver.save(sess, save_model_path)
+
     if val_auc < latest_peak_auc + min_delta_auc:
         # Stop early if peak of val auc has been reached.
         # If it is lower than the previous auc value, wait up to `wait_epochs`
@@ -348,16 +403,12 @@ for epoch in range(num_epochs):
 
         if wait_epochs == waited_epochs:
             print("Stopped early at epoch {0} with saved peak auc {1:10.8}"
-                  .format(epoch+1, latest_peak_auc))
+                  .format(epoch+1, latest_absolute_peak_auc))
             break
 
         waited_epochs += 1
     else:
         latest_peak_auc = val_auc
-        print(f"New peak auc reached: {val_auc:10.8}")
-
-        # Save the model weights.
-        saver.save(sess, save_model_path)
 
         # Reset waited epochs.
         waited_epochs = 0

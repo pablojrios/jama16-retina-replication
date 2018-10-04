@@ -15,6 +15,14 @@ from lib.evaluation import write_predictions_file
 print(f"Numpy version: {np.__version__}")
 print(f"Tensorflow version: {tf.__version__}")
 
+# hacer visiable la GPU 1050 Ti, TF v1.10 pide TF_MIN_GPU_MULTIPROCESSOR_COUNT >= 8
+os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "6"
+# usar la GeForce GTX 1080 Ti
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+# The GPU id to use, usually either "0" or "1"
+# Con 0 usa GeForce GTX 1050 Ti
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 random.seed(432)
 
@@ -99,7 +107,7 @@ Evaluating: {},
 Saving operating thresholds metrics at: {},
 Saving predictions at: {},
 Using operating treshold: {},
-""".format(data_dir, save_operating_thresholds_path, default_save_predictions_filepath, operating_threshold))
+""".format(data_dir, save_operating_thresholds_path, save_predictions_filepath, operating_threshold))
 print("Trying to load model(s):\n{}".format("\n".join(load_model_paths)))
 
 # Other setting variables.
@@ -178,9 +186,12 @@ with eval_graph.as_default() as g:
 
 all_predictions = []
 
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+
 for model_path in load_model_paths:
     # Start session.
-    with tf.Session(graph=tf.Graph()) as sess:
+    with tf.Session(graph=tf.Graph(), config=config) as sess:
         tf.keras.backend.set_session(sess)
         tf.keras.backend.set_learning_phase(False)
         tf.keras.backend.set_image_data_format(image_data_format)

@@ -1,3 +1,14 @@
+Comandos nuevos datasets
+========================
+
+Pre-processing:
+--------------
+# bin300: con 50K imágenes clase 0 de training de 300 pixels
+./eyepacs.sh --redistribute --pool_dir=./data/eyepacs/pool/ --output_dir=./data/eyepacs/bin300/
+python train.py --train_dir=./data/eyepacs/bin300/train/ --val_dir=./data/eyepacs/bin300/validation/
+./messidor2.sh --output_dir=./data/messidor2/bin
+
+
 Commands
 ========
 

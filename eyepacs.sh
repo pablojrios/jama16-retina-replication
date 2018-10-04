@@ -9,6 +9,7 @@ default_pool_dir="$eyepacs_dir/pool"
 default_shuffle_seed=42
 default_output_dir="$eyepacs_dir/bin2"
 grad_grades="$vendor_eyepacs_dir/eyepacs_gradability_grades.csv"
+IMAGE_IDS_FILENAME="image_ids.csv"
 
 # From [1].
 get_seeded_random()
@@ -190,14 +191,28 @@ else
   # bin2_0_tr_cnt=30500 # training clase 0
 
   # 'incluyo más imágenes clase 0 binaria de kaggle que los noruegos'
-  # bin2_0_cnt=68096 # training clase 0 + testing clase 0
-  # bin2_0_tr_cnt=60000 # training clase 0
+  # bin2_0_cnt=58096 # training clase 0 + testing clase 0
+  # bin2_0_tr_cnt=50000 # training clase 0
 
   bin2_1_tr_cnt=16458 # training clase 1 (total clase 1: 17152)
+
   # cantidades para dataset pequeño en eyepacs_small
   # bin2_0_cnt=160
   # bin2_0_tr_cnt=110
   # bin2_1_tr_cnt=20
+  #
+  # Nuevo dataset kaggle con proporciones train y test iguales
+  #             Total	    clase 0     % 0     clase 1     % 1
+  # train	    58473	    45609	    78.0%   12864       22.0%
+  # validation	12864	    10291	    80.0%   2573        20.0%
+  # test	    8576	    6861	    80.0%   1715        20.0%
+  # bin2_0_cnt=62761 # training clase 0 + testing clase 0
+  # bin2_0_tr_cnt=55900 # training clase 0 (incluye validacion)
+  # bin2_1_tr_cnt=15437 # training clase 1 (total clase 1: 17152)
+
+  #  bin2_0_cnt=42308 # training clase 0 + testing clase 0
+  #  bin2_0_tr_cnt=40250 # training clase 0 (incluye validacion)
+  #  bin2_1_tr_cnt=16466 # training clase 1 (total clase 1: 17152)
 fi
 
 echo "Finding images..."
@@ -254,7 +269,7 @@ echo "Moving validation tfrecords to separate folder."
 find "$output_dir/train" -name "validation*.tfrecord" -exec mv {} "$output_dir/validation/." \;
 find "$output_dir/train" -maxdepth 1 -iname "*.txt" -exec cp {} "$output_dir/validation/." \;
 # image_ids_validation.csv
-find "$output_dir/train" -maxdepth 1 -iname "*validation.csv" -exec mv {} "$output_dir/validation/." \;
+find "$output_dir/train" -maxdepth 1 -iname "*validation.csv" -exec mv {} "$output_dir/validation/$IMAGE_IDS_FILENAME" \;
 
 python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir/test" \
        --num_shards=4 || exit 1
