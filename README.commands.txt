@@ -5,9 +5,10 @@ Pre-processing:
 --------------
 # bin300: con 50K imágenes clase 0 de training de 300 pixels
 ./eyepacs.sh --redistribute --pool_dir=./data/eyepacs/pool/ --output_dir=./data/eyepacs/bin300/
-python train.py --train_dir=./data/eyepacs/bin300/train/ --val_dir=./data/eyepacs/bin300/validation/
-./messidor2.sh --output_dir=./data/messidor2/bin
-
+python train.py --train_dir=./data/eyepacs/bin300.norway/train/ --val_dir=./data/eyepacs/bin300.norway/validation/ --data_augmentation
+python train.py --train_dir=./data/eyepacs/bin512/train/ --val_dir=./data/eyepacs/bin512/validation/ --large_diameter --data_augmentation
+./messidor2.sh --output_dir=./data/messidor2/bin300
+python evaluate.py -m --data_dir=./data/messidor2/bin300/ --load_model_path=./tmp.30sept/model,./tmp.1oct/model,./tmp.2oct/model,./tmp.3oct/model -so=./tmp.3oct/messidor2_ensemble_op_pts.csv -p=./tmp.3oct/messidor2_ensemble_predictions.csv
 
 Commands
 ========
@@ -39,7 +40,7 @@ Pre-processing:
 Testing Ensambles:
 -----------------
 python evaluate.py -e --data_dir=./data/eyepacs/bin2.512/test/ --load_model_path=./tmp.7sept/model,./tmp.8sept/model
-python evaluate.py -m --data_dir=./data/messidor/bin2.512/ --load_model_path=./tmp.7sept/model,./tmp.8sept/model
+python evaluate.py -m --data_dir=./data/messidor/bin2.512/ --load_model_path=./tmp.7sept/model,./tmp.8sept/model -so=./tmp/kaggle_test_op_pts.csv -p=./tmp/kaggle_test_predictions.csv
 
 Training:
 --------

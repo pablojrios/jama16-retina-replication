@@ -138,7 +138,8 @@ python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir" \
 
 echo "Cleaning up..."
 # rm -r "$messidor_volume_files" "$messidor_dir/IMAGES" "$messidor_dir/$dr_grades_file"
-rm -r "$messidor_dir/IMAGESv2" "$messidor_dir/$dr_grades_file"
+# rm -r "$messidor_dir/IMAGESv2" "$messidor_dir/$dr_grades_file"
+rm -r "$messidor_dir/$dr_grades_file"
 
 echo "Done!"
 exit

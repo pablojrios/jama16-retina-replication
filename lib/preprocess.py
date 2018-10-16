@@ -6,6 +6,7 @@
 #
 ########################################################################
 
+import tensorflow as tf
 import os
 import sys
 import cv2
@@ -230,3 +231,33 @@ def scale_normalize(save_path=None, images_path=None, image_paths=None,
                                     save_path=save_path,
                                     diameter=diameter, verbosity=verbosity)
 
+
+def rescale_min_1_to_1(image):
+    """
+    Rescale image to [-1, 1].
+
+    :param image:
+        Required. Image tensor.
+
+    :return:
+        Scaled image.
+    """
+    # Image must be casted to float32 first.
+    image = tf.cast(image, tf.float32)
+    # Rescale image from [0, 255] to [0, 2].
+    image = tf.multiply(image, 1. / 127.5)
+    # Rescale to [-1, 1].
+    return tf.subtract(image, 1.0)
+
+
+def rescale_0_to_1(image):
+    """
+    Rescale image to [0, 1].
+
+    :param image:
+        Required. Image tensor.
+
+    :return:
+        Scaled image.
+    """
+    return tf.image.convert_image_dtype(image, tf.float32)

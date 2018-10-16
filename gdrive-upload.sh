@@ -1,0 +1,6 @@
+gdrive upload kaggle_test_op_pts.csv
+gdrive upload kaggle_test_predictions.csv
+gdrive upload kaggle_validation_op_pts.csv
+gdrive upload kaggle_validation_predictions.csv
+gdrive upload messidor2_test_op_pts.csv
+gdrive upload messidor2_test_predictions.csv

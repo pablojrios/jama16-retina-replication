@@ -9,6 +9,7 @@ from glob import glob
 import lib.metrics
 import lib.dataset
 import lib.evaluation
+from lib.preprocess import rescale_min_1_to_1, rescale_0_to_1
 from tensorflow.python.keras import Model
 from tensorflow.python.keras.layers import Dense, Dropout
 from tensorflow.python.keras.activations import sigmoid
@@ -41,14 +42,18 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-random.seed(432)
+# random.seed(432)
+random.seed(12345)
+# no funcionó, se obtienen resultados diferentes en 2 corridas
+tf.set_random_seed(12345)
+
 
 # Various loading and saving constants.
 default_train_dir = "./data/eyepacs/bin2/train"
 default_val_dir = "./data/eyepacs/bin2/validation"
 default_save_model_path = "./tmp/model"
 default_save_summaries_dir = "./tmp/logs"
-default_save_operating_thresholds_path = "./tmp/validation_op_pts.csv"
+default_save_operating_thresholds_path = "./tmp/train_op_pts.csv"
 # optimizer values: 'nesterov_accelerated_gd', 'vanilla_sgd', 'adam'
 default_optimizer = "nesterov_accelerated_gd"
 
@@ -79,6 +84,10 @@ parser.add_argument("-opt", "--optimizer",
                     default=default_optimizer)
 parser.add_argument("-ld", "--large_diameter", action="store_true",
                     help="diameter of fundus to 512 pixels")
+parser.add_argument("-aug", "--data_augmentation", action="store_true",
+                    help="use data augmentation (training only)")
+parser.add_argument("-1e", "--stop_one_epoch", action="store_true",
+                    help="stop training after first epoch")
 
 args = parser.parse_args()
 train_dir = str(args.train_dir)
@@ -88,6 +97,8 @@ save_summaries_dir = str(args.save_summaries_dir)
 save_operating_thresholds_path = str(args.save_operating_thresholds_path)
 optimizer_name = args.optimizer
 large_diameter = bool(args.large_diameter)
+use_data_augmentation = bool(args.data_augmentation)
+stop_one_epoch = bool(args.stop_one_epoch)
 
 print("""
 Training images folder: {},
@@ -96,22 +107,31 @@ Saving model and graph checkpoints at: {},
 Saving summaries at: {},
 Saving operating points at: {},
 Optimizer: {},
-Large diameter: {}
+Large diameter: {},
+Data augmentation: {}
 """.format(train_dir, val_dir, save_model_path, save_summaries_dir,
-           save_operating_thresholds_path, optimizer_name, large_diameter))
+           save_operating_thresholds_path, optimizer_name, large_diameter, use_data_augmentation))
 
 # Various constants.
 num_channels = 3
 num_workers = 8
+normalization_fn = tf.image.per_image_standardization
+# probé con rescale_min_1_to_1 y después de 23 epochs el AUC en validación era de 0.6001879... aborté training
+# normalization_fn = rescale_min_1_to_1
 
 # Hyper-parameters for training.
-learning_rate = 5e-3
+learning_rate = 3e-3
 momentum = 0.9  # Only used when not training with momentum optimizer
 use_nesterov = True  # Only used when not training with momentum optimizer
-if optimizer_name == 'rmsprop':
-    train_batch_size = 64
-else:
-    train_batch_size = 32 if large_diameter else 64
+train_batch_size = 32 if large_diameter or optimizer_name == 'rmsprop' else 64
+
+# Decay the learning rate exponentially based on the number of steps.
+# decayed_learning_rate = learning_rate * decay_rate ^ (global_step / decay_steps)
+initial_learning_rate = 0.007
+# decay_steps = num_batches_per_epoch * num_epochs_per_decay = 714 * 5
+decay_steps = 714 * 5
+# learning_rate_decay_factor (aka decay_rate)
+learning_rate_decay_factor = 0.5
 
 # ver https://github.com/tensorflow/models/blob/master/research/inception/inception/inception_train.py
 # como entrenan an Inception v3 network from scratch, usando RMSPropOptimizer
@@ -122,12 +142,11 @@ else:
 # – Batch size: 32
 # – Weight decay: 4 · 10−5
 # Constants dictating the learning rate schedule.
-rmsprop_learning_rate = 0.001
-rmsprop_decay = 0.9                # Decay term for RMSProp.
+rmsprop_learning_rate = 1e-3
+rmsprop_decay = 4e-5                # Decay term for RMSProp.
 rmsprop_momentum = 0.9             # Momentum in RMSProp.
 rmsprop_epsilon = 1.0              # Epsilon term for RMSProp.
-# Decay the learning rate exponentially based on the number of steps.
-# decayed_learning_rate = learning_rate * decay_rate ^ (global_step / decay_steps)
+
 
 # – An Adam optimizer with β1 = 0.9, β2 = 0.999, and epsilon = 0.1
 # adam_learning_rate = 1e-3
@@ -139,15 +158,10 @@ rmsprop_epsilon = 1.0              # Epsilon term for RMSProp.
 num_epochs = 200
 wait_epochs = 10
 min_delta_auc = 0.01
-if optimizer_name == 'rmsprop':
-    val_batch_size = 64
-else:
-    val_batch_size = 32 if large_diameter else 64
+val_batch_size = 32 if large_diameter or optimizer_name == 'rmsprop' else 64
+val_batch_size = 32
 num_thresholds = 200
 kepsilon = 1e-7
-
-# no funcionó, se obtienen resultados diferentes en 2 corridas
-# tf.set_random_seed(12345)
 
 # Define thresholds.
 thresholds = lib.metrics.generate_thresholds(num_thresholds, kepsilon) + [0.5]
@@ -178,13 +192,15 @@ train_dataset = lib.dataset.initialize_dataset(
     train_dir, train_batch_size,
     num_workers=num_workers, prefetch_buffer_size=prefetch_buffer_size,
     shuffle_buffer_size=shuffle_buffer_size,
-    image_data_format=image_data_format, num_channels=num_channels)
+    image_data_format=image_data_format, num_channels=num_channels,
+    normalization_fn=normalization_fn, data_augmentation=use_data_augmentation)
 
 val_dataset = lib.dataset.initialize_dataset(
     val_dir, val_batch_size,
     num_workers=num_workers, prefetch_buffer_size=prefetch_buffer_size,
     shuffle_buffer_size=shuffle_buffer_size,
-    image_data_format=image_data_format, num_channels=num_channels)
+    image_data_format=image_data_format, num_channels=num_channels,
+    normalization_fn=normalization_fn)
 
 # Create initializable iterators.
 iterator = tf.data.Iterator.from_structure(
@@ -199,8 +215,11 @@ train_init_op = iterator.make_initializer(train_dataset)
 val_init_op = iterator.make_initializer(val_dataset)
 
 # Base model InceptionV3 without top and global average pooling.
+# base_model = tf.keras.applications.InceptionV3(
+#     include_top=False, weights='imagenet', pooling='avg', input_tensor=x)
 base_model = tf.keras.applications.InceptionV3(
     include_top=False, weights='imagenet', pooling='avg', input_tensor=x)
+base_model.summary()
 
 # hay que ajustar los pesos de todas las capas para obtener mejor AUC
 # base_model.trainable = True
@@ -216,7 +235,18 @@ base_model = tf.keras.applications.InceptionV3(
 #         layer.trainable = False
 
 # Define optimizer.
-global_step = tf.Variable(0, dtype=tf.int32)
+global_step = tf.Variable(0, dtype=tf.int32, trainable=False)
+# diferencia entre tf.Variable y tf.get_variable
+# global_step = tf.get_variable(
+#     'global_step', [],
+#     initializer=tf.constant_initializer(0), trainable=False)
+
+# Decay the learning rate exponentially based on the number of steps.
+# lr = tf.train.exponential_decay(initial_learning_rate,
+#                                 global_step,
+#                                 decay_steps,
+#                                 learning_rate_decay_factor,
+#                                 staircase=True)
 
 if optimizer_name == 'vanilla_sgd':
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
@@ -226,9 +256,7 @@ if optimizer_name == 'vanilla_sgd':
 elif optimizer_name == 'rmsprop':
     # Create an optimizer that performs gradient descent.
     optimizer = tf.train.RMSPropOptimizer(learning_rate=rmsprop_learning_rate,
-                                    decay=rmsprop_decay,
-                                    momentum=rmsprop_momentum,
-                                    epsilon=rmsprop_momentum)
+                                    decay=rmsprop_decay)
 else:
     optimizer = tf.train.MomentumOptimizer(
         learning_rate=learning_rate, momentum=momentum,
@@ -303,6 +331,12 @@ fn, update_fn, reset_fn = lib.metrics.create_reset_metric(
 tn, update_tn, reset_tn = lib.metrics.create_reset_metric(
     tf.metrics.true_negatives_at_thresholds, scope='tn',
     labels=y, predictions=predictions, thresholds=thresholds)
+
+with tf.name_scope('conf_matrix'):
+    tf.summary.scalar('true_positives', tp[-1])
+    tf.summary.scalar('false_positives', fp[-1])
+    tf.summary.scalar('false_negatives', fn[-1])
+    tf.summary.scalar('true_negatives', tn[-1])
 
 confusion_matrix = lib.metrics.confusion_matrix(
     tp[-1], fp[-1], fn[-1], tn[-1], scope='confusion_matrix')
@@ -407,6 +441,10 @@ for epoch in range(num_epochs):
             break
 
         waited_epochs += 1
+    elif stop_one_epoch:
+        print("Stopped early at epoch 1 as per input parameter with saved peak auc {0:10.8}"
+              .format(latest_absolute_peak_auc))
+        break
     else:
         latest_peak_auc = val_auc
 
@@ -421,12 +459,15 @@ saver.restore(sess, save_model_path)
 tf.keras.backend.set_learning_phase(False)
 sess.run([train_init_op, reset_tp, reset_fp, reset_fn, reset_tn])
 
+b = 0
 try:
     while True:
         # Update all confusion metrics for each batch.
         sess.run([update_tp, update_fp, update_fn, update_tn])
+        b += 1
 
 except tf.errors.OutOfRangeError:
+    print(f"confusion metrics updated, number of batches = {b}")
     pass
 
 # Write sensitivities and specificities to file.

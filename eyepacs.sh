@@ -6,7 +6,11 @@
 eyepacs_dir="./data/eyepacs"
 vendor_eyepacs_dir="./vendor/eyepacs"
 default_pool_dir="$eyepacs_dir/pool"
-default_shuffle_seed=42
+
+# default_shuffle_seed=42
+default_shuffle_seed=12345
+default_partition_seed=12345
+
 default_output_dir="$eyepacs_dir/bin2"
 grad_grades="$vendor_eyepacs_dir/eyepacs_gradability_grades.csv"
 IMAGE_IDS_FILENAME="image_ids.csv"
@@ -183,18 +187,21 @@ if echo "$@" | grep -c -- "--only_gradable" >/dev/null; then
   bin2_0_tr_cnt=31106
   bin2_1_tr_cnt=12582
 else
-  bin2_0_cnt=48784 # training clase 0 + testing clase 0
-  bin2_0_tr_cnt=40688 # training clase 0
+  # bin2_0_cnt=48784 # training clase 0 + testing clase 0
+  # bin2_0_tr_cnt=40688 # training clase 0
+  # bin2_1_tr_cnt=16458 # training clase 1 (total clase 1: 17152)
 
   # incluyo menos imágenes de clase 0 binaria para balancear el dataset, performance modelo decae ?
   # bin2_0_cnt=38596 # training clase 0 + testing clase 0
   # bin2_0_tr_cnt=30500 # training clase 0
 
+  # 60% clase 0, 40% clase 1
+  # bin2_0_cnt=32783 # training clase 0 + testing clase 0
+  # bin2_0_tr_cnt=24687 # training clase 0
+
   # 'incluyo más imágenes clase 0 binaria de kaggle que los noruegos'
   # bin2_0_cnt=58096 # training clase 0 + testing clase 0
   # bin2_0_tr_cnt=50000 # training clase 0
-
-  bin2_1_tr_cnt=16458 # training clase 1 (total clase 1: 17152)
 
   # cantidades para dataset pequeño en eyepacs_small
   # bin2_0_cnt=160
@@ -213,6 +220,10 @@ else
   #  bin2_0_cnt=42308 # training clase 0 + testing clase 0
   #  bin2_0_tr_cnt=40250 # training clase 0 (incluye validacion)
   #  bin2_1_tr_cnt=16466 # training clase 1 (total clase 1: 17152)
+
+  bin2_0_cnt=42403 # training clase 0 (incluye validation) + testing clase 0
+  bin2_0_tr_cnt=35336 # training clase 0 (incluye validation)
+  bin2_1_tr_cnt=14293 # training clase 1 (total clase 1: 17152)
 fi
 
 echo "Finding images..."
@@ -227,10 +238,13 @@ find "$pool_dir/"[0-1] -iname "*.jpg" |
 shuf --random-source=<(get_seeded_random "$shuffle_seed") |
 head -n "$bin2_0_cnt"
 )
+class_0_cnt=$(echo $bin2_0 | tr " " "\n" | wc -l)
+echo "Selected $class_0_cnt binary class 0 images."
 
 bin2_1=$(find "$pool_dir/"[2-4] -iname "*.jpg")
 # [pablo] next line is the same as bin2_1_cnt=$(echo $bin2_1 | wc -w)
 bin2_1_cnt=$(echo $bin2_1 | tr " " "\n" | wc -l)
+echo "Selected $bin2_1_cnt binary class 1 images."
 
 echo "Creating directories for data sets"
 mkdir -p "$output_dir/train/0" "$output_dir/train/1"
@@ -245,23 +259,31 @@ distribute_images()
   xargs -I{} cp "{}" "$4"
 }
 
-echo "Gathering $bin2_0_tr_cnt images for train set (0/2)"
+echo "Gathering $bin2_0_tr_cnt images for train+validation set (0/2)"
 distribute_images "$bin2_0" head "$bin2_0_tr_cnt" "$output_dir/train/0/."
+# cnt=$(find "$output_dir/train/0/" -name "*.jpg" | wc -l)
+# echo "$cnt images copied to $output_dir/train/0/"
 
-echo "Gathering $bin2_1_tr_cnt images for train set (1/2)"
+echo "Gathering $bin2_1_tr_cnt images for train+validation set (1/2)"
 distribute_images "$bin2_1" head "$bin2_1_tr_cnt" "$output_dir/train/1/."
+# cnt=$(find "$output_dir/train/1/" -name "*.jpg" | wc -l)
+# echo "$cnt images copied to $output_dir/train/1/"
 
 echo "Gathering $(expr $bin2_0_cnt - $bin2_0_tr_cnt) images for test set (0/2)"
 distribute_images "$bin2_0" tail "$(expr $bin2_0_cnt - $bin2_0_tr_cnt)" "$output_dir/test/0/."
+# cnt=$(find "$output_dir/test/0/" -name "*.jpg" | wc -l)
+# echo "$cnt images copied to $output_dir/test/0/"
 
 echo "Gathering $(expr $bin2_1_cnt - $bin2_1_tr_cnt) images for test set (1/2)"
 distribute_images "$bin2_1" tail "$(expr $bin2_1_cnt - $bin2_1_tr_cnt)" "$output_dir/test/1/."
+# cnt=$(find "$output_dir/test/1/" -name "*.jpg" | wc -l)
+# echo "$cnt images copied to $output_dir/test/1/"
 
 echo "Converting data set to tfrecords..."
 git submodule update --init
 
 python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir/train" \
-       --num_shards=8 --validation_size=0.2 || \
+       --num_shards=8 --validation_size=0.2 --random_seed="$default_partition_seed"|| \
     { echo "Submodule not initialized. Run git submodule update --init";
       exit 1; }
 

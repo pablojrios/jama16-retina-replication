@@ -7,13 +7,16 @@ def generate_thresholds(num_thresholds, kepsilon=1e-7):
     ]
     return [0.0 - kepsilon] + thresholds + [1.0 - kepsilon]
 
-
+# http://ronny.rest/blog/post_2017_09_11_tf_metrics/
 def create_reset_metric(metric, scope='reset_metrics', **metric_args):
-    with tf.variable_scope(scope) as s:
+    with tf.variable_scope(scope):
         metric_op, update_op = metric(**metric_args)
-        vars = tf.contrib.framework.get_variables(
-            s, collection=tf.GraphKeys.LOCAL_VARIABLES)
-        reset_op = tf.variables_initializer(vars, name='reset')
+        # vars = tf.contrib.framework.get_variables(
+        #    s, collection=tf.GraphKeys.LOCAL_VARIABLES)
+        # Isolate the variables stored behind the scenes by the metric operation
+        running_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES)
+        # las variables son tp/reset, fp/reset, fn/reset, tn/reset, brier/reset, auc/reset
+        reset_op = tf.variables_initializer(running_vars, name='reset')
     return metric_op, update_op, reset_op
 
 

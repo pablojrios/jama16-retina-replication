@@ -29,6 +29,7 @@ if exists(tmp_path):
 makedirs(tmp_path)
 
 failed_images = []
+reflejos_images = []
 
 diameter = 512 if large_diameter else 299
 print("Large fundus diameter={}".format(large_diameter))
@@ -38,7 +39,7 @@ with open(labels, 'r') as f:
     next(reader)
 
     for i, row in enumerate(reader):
-        basename, grade, dme, gradable = row
+        basename, grade, dme, gradable, reflejos = row
 
         # Skip non-gradable images, son solo 4 imagenes:
         # 20060411_58550_0200_PP.png,,,0
@@ -47,6 +48,9 @@ with open(labels, 'r') as f:
         # IM004176.jpg,,,0
         if gradable == '0':
             failed_images.append(basename)
+            continue
+        elif reflejos == '1':
+            reflejos_images.append(basename)
             continue
 
         im_path = join(data_dir, "IMAGESv2/{}".format(basename))
@@ -79,3 +83,6 @@ if len(failed_images) != 0:
     print("\nCould not preprocess {} images.".format(len(failed_images)))
     print(", ".join(failed_images))
 
+if len(reflejos_images) != 0:
+    print("\nDid not preprocess {} images because of reflexions.".format(len(reflejos_images)))
+    print(", ".join(reflejos_images))
