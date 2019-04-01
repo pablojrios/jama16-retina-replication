@@ -249,15 +249,3 @@ def rescale_min_1_to_1(image):
     # Rescale to [-1, 1].
     return tf.subtract(image, 1.0)
 
-
-def rescale_0_to_1(image):
-    """
-    Rescale image to [0, 1].
-
-    :param image:
-        Required. Image tensor.
-
-    :return:
-        Scaled image.
-    """
-    return tf.image.convert_image_dtype(image, tf.float32)

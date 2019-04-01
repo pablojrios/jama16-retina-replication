@@ -1,12 +1,20 @@
 Comandos nuevos datasets
 ========================
 
+Pre-processing (marzo 2019)
+./messidor.sh --output_dir=./data/messidor/tobemerged --no_tfrecords --eyepacs_pool_dir=./data/eyepacs/pool2/
+./eyepacs2.sh --redistribute --pool_dir=./data/eyepacs/pool2/ --output_dir=./data/eyepacs/eyep_mess_merged/
+python train.py --train_dir=./data/eyepacs/eyep_mess_merged/train/ --val_dir=./data/eyepacs/eyep_mess_merged/validation/ --optimizer=adam
+python evaluate.py -e --data_dir=./data/eyepacs/eyep_mess_merged/validation/ --load_model_path=./tmp/model -so=./tmp/kaggle_validation_op_pts.csv -p=./tmp/kaggle_validation_predictions.csv
+
+
 Pre-processing:
 --------------
 # bin300: con 50K imágenes clase 0 de training de 300 pixels
 ./eyepacs.sh --redistribute --pool_dir=./data/eyepacs/pool/ --output_dir=./data/eyepacs/bin300/
-python train.py --train_dir=./data/eyepacs/bin300.norway/train/ --val_dir=./data/eyepacs/bin300.norway/validation/ --data_augmentation
+python train.py --train_dir=./data/eyepacs/bin300.nobug.23.8/train/ --val_dir=./data/eyepacs/bin300.nobug.23.8/validation/ --data_augmentation --optimizer=adam
 python train.py --train_dir=./data/eyepacs/bin512/train/ --val_dir=./data/eyepacs/bin512/validation/ --large_diameter --data_augmentation
+python train.py --train_dir=./data/eyepacs/bin512/train/ --val_dir=./data/eyepacs/bin512/validation/ --optimizer=adam --large_diameter
 ./messidor2.sh --output_dir=./data/messidor2/bin300
 python evaluate.py -m --data_dir=./data/messidor2/bin300/ --load_model_path=./tmp.30sept/model,./tmp.1oct/model,./tmp.2oct/model,./tmp.3oct/model -so=./tmp.3oct/messidor2_ensemble_op_pts.csv -p=./tmp.3oct/messidor2_ensemble_predictions.csv
 
@@ -15,6 +23,8 @@ Commands
 
 Pre-processing:
 --------------
+./messidor2.sh --output_dir=./data/messidor2/tfrecordsno --no_tfrecords
+
 ./messidor2.sh --output_dir=./data/messidor2/bin
 ./messidor2.sh --output_dir=./data/messidor2/bin2.512 --large_diameter
 ./messidor2.sh --output_dir=./data/messidor2/bin2.512.v2/ --large_diameter

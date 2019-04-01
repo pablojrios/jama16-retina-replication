@@ -21,7 +21,7 @@ os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "6"
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # The GPU id to use, usually either "0" or "1"
 # Con 0 usa GeForce GTX 1050 Ti
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 random.seed(432)

@@ -1,5 +1,6 @@
 #!/bin/bash
 # Preprocess script for the EyePACS data set from Kaggle.
+# Based on eyepacs.sh but differs in how
 
 # Assumes that the data set resides in ./data/eyepacs.
 
@@ -188,43 +189,8 @@ if echo "$@" | grep -c -- "--only_gradable" >/dev/null; then
   bin2_0_tr_cnt=31106
   bin2_1_tr_cnt=12582
 else
-  # bin2_0_cnt=48784 # training clase 0 + testing clase 0
-  # bin2_0_tr_cnt=40688 # training clase 0
-  # bin2_1_tr_cnt=16458 # training clase 1 (total clase 1: 17152)
-
-  # incluyo menos imágenes de clase 0 binaria para balancear el dataset, performance modelo decae ?
-  # bin2_0_cnt=38596 # training clase 0 + testing clase 0
-  # bin2_0_tr_cnt=30500 # training clase 0
-
-  # 60% clase 0, 40% clase 1
-  # bin2_0_cnt=32783 # training clase 0 + testing clase 0
-  # bin2_0_tr_cnt=24687 # training clase 0
-
-  # 'incluyo más imágenes clase 0 binaria de kaggle que los noruegos'
-  # bin2_0_cnt=58096 # training clase 0 + testing clase 0
-  # bin2_0_tr_cnt=50000 # training clase 0
-
-  # cantidades para dataset pequeño en eyepacs_small
-  # bin2_0_cnt=160
-  # bin2_0_tr_cnt=110
-  # bin2_1_tr_cnt=20
-  #
-  # Nuevo dataset kaggle con proporciones train y test iguales
-  #             Total	    clase 0     % 0     clase 1     % 1
-  # train	    58473	    45609	    78.0%   12864       22.0%
-  # validation	12864	    10291	    80.0%   2573        20.0%
-  # test	    8576	    6861	    80.0%   1715        20.0%
-  # bin2_0_cnt=62761 # training clase 0 + testing clase 0
-  # bin2_0_tr_cnt=55900 # training clase 0 (incluye validacion)
-  # bin2_1_tr_cnt=15437 # training clase 1 (total clase 1: 17152)
-
-  #  bin2_0_cnt=42308 # training clase 0 + testing clase 0
-  #  bin2_0_tr_cnt=40250 # training clase 0 (incluye validacion)
-  #  bin2_1_tr_cnt=16466 # training clase 1 (total clase 1: 17152)
-
-  bin2_0_cnt=54914 # training clase 0 (incluye validation) + testing clase 0
-  bin2_0_tr_cnt=45762 # training clase 0 (incluye validation)
-  bin2_1_tr_cnt=14293 # training clase 1 (total clase 1: 17152)
+  bin2_0_cnt=53000 # training clase 0 (incluye validation) + testing clase 0
+  testing_percent=0.05 # testing size is equal to validation
 fi
 
 echo "Finding images..."
@@ -263,32 +229,36 @@ distribute_images()
   xargs -I{} cp "{}" "$4"
 }
 
+bin2_0_tr_cnt=$(awk -v cnt="$bin2_0_cnt" -v pct="$testing_percent" 'BEGIN{print int(cnt * (1 - pct))}')
+bin2_1_tr_cnt=$(awk -v cnt="$bin2_1_cnt" -v pct="$testing_percent" 'BEGIN{print int(cnt * (1 - pct))}')
+validation_percent=$(awk -v pct="$testing_percent" 'BEGIN{print pct / (1 - pct)}')
+
 echo "Gathering $bin2_0_tr_cnt images for train+validation set (0/2)"
 distribute_images "$bin2_0" head "$bin2_0_tr_cnt" "$output_dir/train/0/."
-# cnt=$(find "$output_dir/train/0/" -name "*.jpg" | wc -l)
-# echo "$cnt images copied to $output_dir/train/0/"
+cnt=$(find "$output_dir/train/0/" -name "*.jpg" | wc -l)
+echo "$cnt images copied to $output_dir/train/0/"
 
 echo "Gathering $bin2_1_tr_cnt images for train+validation set (1/2)"
 distribute_images "$bin2_1" head "$bin2_1_tr_cnt" "$output_dir/train/1/."
-# cnt=$(find "$output_dir/train/1/" -name "*.jpg" | wc -l)
-# echo "$cnt images copied to $output_dir/train/1/"
+cnt=$(find "$output_dir/train/1/" -name "*.jpg" | wc -l)
+echo "$cnt images copied to $output_dir/train/1/"
 
 echo "Gathering $(expr $bin2_0_cnt - $bin2_0_tr_cnt) images for test set (0/2)"
 distribute_images "$bin2_0" tail "$(expr $bin2_0_cnt - $bin2_0_tr_cnt)" "$output_dir/test/0/."
-# cnt=$(find "$output_dir/test/0/" -name "*.jpg" | wc -l)
-# echo "$cnt images copied to $output_dir/test/0/"
+cnt=$(find "$output_dir/test/0/" -name "*.jpg" | wc -l)
+echo "$cnt images copied to $output_dir/test/0/"
 
 echo "Gathering $(expr $bin2_1_cnt - $bin2_1_tr_cnt) images for test set (1/2)"
 distribute_images "$bin2_1" tail "$(expr $bin2_1_cnt - $bin2_1_tr_cnt)" "$output_dir/test/1/."
-# cnt=$(find "$output_dir/test/1/" -name "*.jpg" | wc -l)
-# echo "$cnt images copied to $output_dir/test/1/"
+cnt=$(find "$output_dir/test/1/" -name "*.jpg" | wc -l)
+echo "$cnt images copied to $output_dir/test/1/"
 
 echo "Converting data set to tfrecords..."
 git submodule update --init
 
 python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir/train" \
-       --num_shards=8 --validation_size=0.2 --random_seed="$shuffle_seed"|| \
-    { echo "Submodule not initialized. Run git submodule update --init";
+       --num_shards=8 --validation_size="$validation_percent" --random_seed="$shuffle_seed"|| \
+    { echo "Submodule not initialized. Run git submodule updae --init";
       exit 1; }
 
 echo "Moving validation tfrecords to separate folder."

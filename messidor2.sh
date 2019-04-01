@@ -22,16 +22,17 @@ print_usage()
   echo ""
   echo "Extracting and preprocessing script for Messidor-2 dataset."
   echo ""
-  echo "Optional parameters: --only_gradable --large_diameter"
-  echo "--only_gradable Skip ungradable images. (default: false)"
-  echo "--large_diameter  diameter of fundus to 512 pixels (default: false, 299 pixels)"
-  echo "--output_dir 	Path to output directory (default: $default_output_dir)"
+  echo "Optional parameters: --only_gradable --large_diameter --tfrecords"
+  echo "--only_gradable     Skip ungradable images. (default: false)"
+  echo "--large_diameter    diameter of fundus to 512 pixels (default: false, 299 pixels)"
+  echo "--output_dir 	    Path to output directory (default: $default_output_dir)"
+  echo "--no_tfrecords         Do not generate tensorflow dataset."
   exit 1
 }
 
 check_parameters()
 {
-  if [ "$1" -ge 4 ]; then
+  if [ "$1" -ge 5 ]; then
     echo "Illegal number of parameters".
     print_usage
   fi
@@ -51,7 +52,7 @@ if echo "$@" | grep -c -- "-h" >/dev/null; then
 fi
 
 strip_params=$(echo "$@" | sed "s/--\([a-z_]\+\)\(=\([^ ]\+\)\)\?/\1/g")
-check_parameters "$#" "$strip_params" "output_dir only_gradable large_diameter"
+check_parameters "$#" "$strip_params" "output_dir only_gradable large_diameter no_tfrecords"
 
 # Get output directory from parameters.
 output_dir=$(echo "$@" | sed "s/.*--output_dir=\([^ ]\+\).*/\1/")
@@ -62,9 +63,9 @@ if ! [[ "$output_dir" =~ ^[^-]+$ ]]; then
 fi
 
 if ls "$output_dir" >/dev/null 2>&1; then
-  echo "Dataset is already located in $output_dir."
-  echo "Specify another output directory with the --output_dir flag."
-  exit 1
+    echo "Dataset is already located in $output_dir."
+    echo "Specify another output directory with the --output_dir flag."
+    exit 1
 fi
 
 # Confirm the annotations file is present.
@@ -105,8 +106,7 @@ fi
 # Copying labels file from vendor to data directory.
 cp "$vendor_messidor_dir/$dr_grades_file" "$messidor_dir/$dr_grades_file"
 
-# Preprocess the data set and categorize the images by labels into
-#  subdirectories.
+# Preprocess the data set and categorize the images by labels into subdirectories.
 # use 512 pixels diameter images ?
 if echo "$@" | grep -c -- "--large_diameter" >/dev/null; then
     echo "Diameter of fundus to 512 pixels."
@@ -116,25 +116,37 @@ else
     python preprocess_messidor2.py --data_dir="$messidor_dir" || exit 1
 fi
 
+# Skip generating tensorflow dataset if --no_tfrecords parameter is defined.
+if ! echo "$@" | grep -c -- "--no_tfrecords" >/dev/null; then
 
-echo "Preparing data set..."
-mkdir -p "$output_dir/0" "$output_dir/1"
+    echo "Preparing data set..."
+    mkdir -p "$output_dir/0" "$output_dir/1"
 
-echo "Moving images to new directories..."
-find "$messidor_dir/"[0-1] -iname "*.jpg" -exec mv {} "$output_dir/0/." \;
-find "$messidor_dir/"[2-4] -iname "*.jpg" -exec mv {} "$output_dir/1/." \;
+    echo "Moving images to new directories..."
+    find "$messidor_dir/"[0-1] -iname "*.jpg" -exec mv {} "$output_dir/0/." \;
+    find "$messidor_dir/"[2-4] -iname "*.jpg" -exec mv {} "$output_dir/1/." \;
 
-echo "Removing old directories..."
-rmdir "$messidor_dir/"[0-4]
+    echo "Removing old directories..."
+    rmdir "$messidor_dir/"[0-4]
 
-# Convert the data set to tfrecords.
-echo "Converting data set to tfrecords..."
-git submodule update --init
+    # Convert the data set to tfrecords.
+    echo "Converting data set to tfrecords..."
+    git submodule update --init
 
-python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir" \
-       --num_shards=2 || \
-    { echo "Submodule not initialized. Run git submodule update --init";
-      exit 1; }
+    python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir" \
+           --num_shards=2 || \
+        { echo "Submodule not initialized. Run git submodule update --init";
+          exit 1; }
+
+else
+
+    echo "Creating $output_dir..."
+    mkdir -p "$output_dir"
+
+    echo "Moving images to $output_dir..."
+    for i in {0..4}; do mv "$messidor_dir/$i" "$output_dir/"; done
+
+fi
 
 echo "Cleaning up..."
 # rm -r "$messidor_volume_files" "$messidor_dir/IMAGES" "$messidor_dir/$dr_grades_file"

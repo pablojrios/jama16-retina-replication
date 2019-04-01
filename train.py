@@ -9,7 +9,7 @@ from glob import glob
 import lib.metrics
 import lib.dataset
 import lib.evaluation
-from lib.preprocess import rescale_min_1_to_1, rescale_0_to_1
+from lib.preprocess import rescale_min_1_to_1
 from tensorflow.python.keras import Model
 from tensorflow.python.keras.layers import Dense, Dropout
 from tensorflow.python.keras.activations import sigmoid
@@ -43,9 +43,9 @@ os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # random.seed(432)
-random.seed(12345)
+random.seed(23456)
 # no funcionó, se obtienen resultados diferentes en 2 corridas
-tf.set_random_seed(12345)
+tf.set_random_seed(23456)
 
 
 # Various loading and saving constants.
@@ -149,15 +149,18 @@ rmsprop_epsilon = 1.0              # Epsilon term for RMSProp.
 
 
 # – An Adam optimizer with β1 = 0.9, β2 = 0.999, and epsilon = 0.1
-# adam_learning_rate = 1e-3
-# beta1 = 0.9
-# beta2 = 0.999
-# epsilon = 0.1
+adam_learning_rate = 1e-3
+beta1 = 0.9
+beta2 = 0.999
+epsilon = 1e-8
+# TP == 0 y FP == 0 en las primeras 6 iteraciones y aborté el training
+# epsilon = 1.0
 
 # Hyper-parameters for validation.
 num_epochs = 200
 wait_epochs = 10
 min_delta_auc = 0.01
+max_delta_auc = 0.02
 val_batch_size = 32 if large_diameter or optimizer_name == 'rmsprop' else 64
 val_batch_size = 32
 num_thresholds = 200
@@ -221,6 +224,10 @@ base_model = tf.keras.applications.InceptionV3(
     include_top=False, weights='imagenet', pooling='avg', input_tensor=x)
 base_model.summary()
 
+# freeze the convolutional base
+#for layer in base_model.layers:
+#    layer.trainable = False
+
 # hay que ajustar los pesos de todas las capas para obtener mejor AUC
 # base_model.trainable = True
 # set_trainable = False
@@ -250,9 +257,9 @@ global_step = tf.Variable(0, dtype=tf.int32, trainable=False)
 
 if optimizer_name == 'vanilla_sgd':
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-# elif optimizer_name == 'adam':
-#     optimizer = tf.train.AdamOptimizer(learning_rate=adam_learning_rate,
-#                                        beta1=beta1, beta2=beta2, epsilon=epsilon)
+elif optimizer_name == 'adam':
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate,
+                                       beta1=beta1, beta2=beta2, epsilon=epsilon)
 elif optimizer_name == 'rmsprop':
     # Create an optimizer that performs gradient descent.
     optimizer = tf.train.RMSPropOptimizer(learning_rate=rmsprop_learning_rate,
@@ -265,6 +272,7 @@ else:
 # tvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
 # from https://www.kaggle.com/shuyuan00/resnet50-with-0-985lb/code
+# (Also check http://marubon-ds.blogspot.com/2017/10/inceptionv3-fine-tuning-model.html)
 #
 # global_average_pooling2d (Globa (None, 2048)         0           mixed10[0][0]
 # __________________________________________________________________________________________________
@@ -435,9 +443,10 @@ for epoch in range(num_epochs):
         # If it is lower than the previous auc value, wait up to `wait_epochs`
         #  to see if it does not increase again.
 
-        if wait_epochs == waited_epochs:
-            print("Stopped early at epoch {0} with saved peak auc {1:10.8}"
-                  .format(epoch+1, latest_absolute_peak_auc))
+        # si llevo 10+ epoch sin mejora (de min_delta_auc), pero el auc actual no cayo más de max_delta_auc, sigo
+        if waited_epochs >= wait_epochs and val_auc < latest_peak_auc - max_delta_auc:
+            print("Stopped early at epoch {0} with saved peak auc {1:10.8} and control auc {2:10.8}"
+                  .format(epoch+1, latest_absolute_peak_auc, latest_peak_auc))
             break
 
         waited_epochs += 1

@@ -13,16 +13,18 @@ print_usage()
   echo ""
   echo "Extracting and preprocessing script for Messidor-1 dataset."
   echo ""
-  echo "Optional parameters: --only_gradable --large_diameter"
-  echo "--only_gradable Skip ungradable images. (default: false)"
-  echo "--large_diameter  diameter of fundus to 512 pixels (default: false, 299 pixels)"
-  echo "--output_dir 	Path to output directory (default: $default_output_dir)"
+  echo "Optional parameters: --only_gradable --large_diameter --no_tfrecords --eyepacs_pool_dir"
+  echo "--only_gradable     Skip ungradable images. (default: false)"
+  echo "--large_diameter    diameter of fundus to 512 pixels (default: false, 299 pixels)"
+  echo "--output_dir        Path to output directory (default: $default_output_dir)"
+  echo "--no_tfrecords      Do not generate tensorflow dataset."
+  echo "--eyepacs_pool_dir  Required if --no_tfrecords is specified, copies Messidor images into Eyepacs directories."
   exit 1
 }
 
 check_parameters()
 {
-  if [ "$1" -ge 4 ]; then
+  if [ "$1" -ge 6 ]; then
     echo "Illegal number of parameters".
     print_usage
   fi
@@ -42,7 +44,7 @@ if echo "$@" | grep -c -- "-h" >/dev/null; then
 fi
 
 strip_params=$(echo "$@" | sed "s/--\([a-z_]\+\)\(=\([^ ]\+\)\)\?/\1/g")
-check_parameters "$#" "$strip_params" "output_dir only_gradable large_diameter"
+check_parameters "$#" "$strip_params" "output_dir only_gradable large_diameter no_tfrecords eyepacs_pool_dir"
 
 # Get output directory from parameters.
 output_dir=$(echo "$@" | sed "s/.*--output_dir=\([^ ]\+\).*/\1/")
@@ -97,8 +99,16 @@ fi
 
 # According to [1], we have to correct some duplicate images and
 #  grades in the data set.
-
 echo "Correcting data set..."
+
+# 09 February 2018: Grading inconsistencies among image duplicates
+# Among the image duplicates in Base 33 (see 16 August 2017 erratum), 2 of them have inconsistent grades:
+#
+# 20051202_55562_0400_PP.tif and 20051202_54611_0400_PP.tif have different ‘Risk of macular edema’ grades (0 and 1 respectively)
+#    [already fixec]
+# 20051202_55626_0400_PP.tif and 20051205_33025_0400_PP.tif have different Retinopathy grades (2 and 3 respectively)
+#    [already fixed]
+
 # 16 August 2017: Image duplicates in Base33
 echo "20051202_54744_0400_PP.jpg 20051202_40508_0400_PP.jpg
 20051202_41238_0400_PP.jpg 20051202_41260_0400_PP.jpg
@@ -116,24 +126,54 @@ find "$messidor_dir/1" -name "20051020_64007_0100_PP.jpg" -exec mv {} "$messidor
 find "$messidor_dir/3" -name "20051020_63936_0100_PP.jpg" -exec mv {} "$messidor_dir/1/." \;
 find "$messidor_dir/2" -name "20060523_48477_0100_PP.jpg" -exec mv {} "$messidor_dir/3/." \;
 
-echo "Preparing data set..."
-mkdir -p "$output_dir/0" "$output_dir/1"
+# Skip generating tensorflow dataset if --no_tfrecords parameter is defined.
+if ! echo "$@" | grep -c -- "--no_tfrecords" >/dev/null; then
 
-echo "Moving images to new directories..."
-find "$messidor_dir/"[0-1] -iname "*.jpg" -exec mv {} "$output_dir/0/." \;
-find "$messidor_dir/"[2-3] -iname "*.jpg" -exec mv {} "$output_dir/1/." \;
+    echo "Preparing data set..."
+    mkdir -p "$output_dir/0" "$output_dir/1"
 
-echo "Removing old directories..."
-rmdir "$messidor_dir/"[0-3]
+    echo "Moving images to new directories..."
+    find "$messidor_dir/"[0-1] -iname "*.jpg" -exec mv {} "$output_dir/0/." \;
+    find "$messidor_dir/"[2-3] -iname "*.jpg" -exec mv {} "$output_dir/1/." \;
 
-# Convert the data set to tfrecords.
-echo "Converting data set to tfrecords..."
-git submodule update --init
+    echo "Removing old directories..."
+    rmdir "$messidor_dir/"[0-3]
 
-python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir" \
-       --num_shards=2 || \
-    { echo "Submodule not initialized. Run git submodule update --init";
-      exit 1; }
+    # Convert the data set to tfrecords.
+    echo "Converting data set to tfrecords..."
+    git submodule update --init
+
+    python ./create_tfrecords/create_tfrecord.py --dataset_dir="$output_dir" \
+           --num_shards=2 || \
+        { echo "Submodule not initialized. Run git submodule update --init";
+          exit 1; }
+
+else
+
+    echo "Creating $output_dir..."
+    mkdir -p "$output_dir"
+
+    echo "Moving images to $output_dir..."
+    for i in {0..3}; do mv "$messidor_dir/$i" "$output_dir/"; done
+
+    # Get output directory from parameters.
+    eyepacs_pool_dir=$(echo "$@" | sed "s/.*--eyepacs_pool_dir=\([^ ]\+\).*/\1/")
+
+    # if directory is valid merge Messidor images into Eyepacs directories.
+    if [[ "$eyepacs_pool_dir" =~ ^[^-]+$ ]]; then
+
+        echo "Moving Messidor images at $output_dir to Eyepacs directories at $eyepacs_pool_dir..."
+        for i in {0..3}; do
+            find "$output_dir/$i" -iname "*.jpg" -exec mv {} "$eyepacs_pool_dir/$i/." \;
+        done
+
+        echo "Removing Messidor directories..."
+        # rmdir "$output_dir/"[0-3]
+        rm -fr "$output_dir/"
+
+    fi
+
+fi
 
 echo "Done!"
 exit
